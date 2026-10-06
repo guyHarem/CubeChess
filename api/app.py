@@ -142,6 +142,66 @@ def undo_move():
     return jsonify(convert_response(response)), status_code
 
 
+# ==================== SANDBOX (TESTING ONLY) ====================
+# Position editing for the test bench frontend. Not part of the game API.
+
+def sandbox_response(response):
+    status_code = 200 if response.get("success") else 400
+    return jsonify(convert_response(response)), status_code
+
+
+@app.route('/api/debug/setup', methods=['POST'])
+def debug_setup():
+    """Replace the whole position: {"pieces": [{"coord", "type", "color"}], "current_player", "rocks"}"""
+    data = request.get_json(silent=True) or {}
+    try:
+        pieces = [{"coord": parse_coord(item["coord"]), "type": item["type"], "color": item["color"]}
+                  for item in data.get("pieces", [])]
+    except (TypeError, KeyError, ValueError):
+        return jsonify({"success": False, "error": "Invalid pieces list"}), 400
+    
+    return sandbox_response(game_manager.setup_position(
+        pieces, data.get("current_player", "white"), bool(data.get("rocks", True))))
+
+
+@app.route('/api/debug/place', methods=['POST'])
+def debug_place():
+    """Put a piece on a square (replacing whatever is there): {"coord", "type", "color"}"""
+    data = request.get_json(silent=True) or {}
+    try:
+        coord = parse_coord(data.get("coord"))
+    except ValueError:
+        return jsonify({"success": False, "error": "Invalid coordinate format"}), 400
+    
+    return sandbox_response(game_manager.place_piece(coord, data.get("type"), data.get("color")))
+
+
+@app.route('/api/debug/remove', methods=['POST'])
+def debug_remove():
+    """Empty a square: {"coord"}"""
+    data = request.get_json(silent=True) or {}
+    try:
+        coord = parse_coord(data.get("coord"))
+    except ValueError:
+        return jsonify({"success": False, "error": "Invalid coordinate format"}), 400
+    
+    return sandbox_response(game_manager.remove_piece(coord))
+
+
+@app.route('/api/debug/turn', methods=['POST'])
+def debug_turn():
+    """Choose who moves next: {"player"}"""
+    data = request.get_json(silent=True) or {}
+    return sandbox_response(game_manager.set_turn(data.get("player")))
+
+
+@app.route('/api/debug/rocks', methods=['POST'])
+def debug_rocks():
+    """Add or remove the dungeon rocks: {"enabled"}"""
+    data = request.get_json(silent=True) or {}
+    return sandbox_response(game_manager.set_rocks(bool(data.get("enabled"))))
+
+
 # ==================== SERVER ====================
 
 if __name__ == '__main__':

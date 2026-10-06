@@ -71,5 +71,71 @@ class TestApi(unittest.TestCase):
         self.assertEqual(res.status_code, 400)
 
 
+class TestSandboxApi(unittest.TestCase):
+    def setUp(self):
+        self.client = app.test_client()
+
+    def post(self, path, body):
+        return self.client.post('/api/debug/' + path, json=body)
+
+    def legal_moves(self, coord):
+        res = self.client.get('/api/game/legal-moves', query_string={"from": str(coord)})
+        return res.get_json()["legal_moves"]
+
+    def test_single_piece_on_empty_board(self):
+        data = self.post('setup', {"rocks": False, "pieces": [
+            {"coord": [3, 3, 0], "type": "Rook", "color": "white"}]}).get_json()
+        self.assertEqual(data["board"], {"[3, 3, 0]": "Rook(white)"})
+        self.assertEqual(data["status"], "ongoing")
+        # 7 along X + 7 along Y + 4 along Z, no king needed
+        self.assertEqual(len(self.legal_moves([3, 3, 0])), 18)
+
+    def test_place_capture_and_block(self):
+        self.post('setup', {"rocks": False, "pieces": [
+            {"coord": [3, 3, 0], "type": "Rook", "color": "white"}]})
+        self.post('place', {"coord": [3, 5, 0], "type": "Pawn", "color": "black"})
+        self.post('place', {"coord": [5, 3, 0], "type": "Pawn", "color": "white"})
+        moves = self.legal_moves([3, 3, 0])
+        self.assertIn([3, 5, 0], moves)     # capture
+        self.assertNotIn([3, 6, 0], moves)  # behind the enemy pawn
+        self.assertNotIn([5, 3, 0], moves)  # own pawn
+        data = self.client.post('/api/game/move', json={"from": [3, 3, 0], "to": [3, 5, 0]}).get_json()
+        self.assertEqual(data["move_history"][-1]["captured_piece"], "Pawn(black)")
+
+    def test_remove_and_turn(self):
+        self.post('setup', {"rocks": False, "pieces": [
+            {"coord": [3, 3, 0], "type": "Knight", "color": "black"},
+            {"coord": [0, 0, 0], "type": "Knight", "color": "white"}]})
+        self.assertEqual(self.legal_moves([3, 3, 0]), [])  # white to move
+        data = self.post('turn', {"player": "black"}).get_json()
+        self.assertEqual(data["current_player"], "black")
+        self.assertEqual(len(self.legal_moves([3, 3, 0])), 24)
+        data = self.post('remove', {"coord": [0, 0, 0]}).get_json()
+        self.assertNotIn("[0, 0, 0]", data["board"])
+
+    def test_rocks_toggle(self):
+        self.post('setup', {"pieces": []})
+        self.assertEqual(len(self.client.get('/api/game/state').get_json()["board"]), 16)
+        self.assertEqual(self.post('rocks', {"enabled": False}).get_json()["board"], {})
+        self.assertEqual(len(self.post('rocks', {"enabled": True}).get_json()["board"]), 16)
+
+    def test_placed_pieces_only_keep_rights_on_home_squares(self):
+        self.post('setup', {"rocks": False, "pieces": [
+            {"coord": [0, 1, 0], "type": "Pawn", "color": "white"},
+            {"coord": [5, 3, 0], "type": "Pawn", "color": "white"},
+            {"coord": [4, 3, 1], "type": "King", "color": "white"},
+            {"coord": [7, 3, 1], "type": "Rook", "color": "white"}]})
+        self.assertIn([0, 3, 0], self.legal_moves([0, 1, 0]))
+        self.assertNotIn([5, 5, 0], self.legal_moves([5, 3, 0]))
+        self.assertNotIn([6, 3, 1], self.legal_moves([4, 3, 1]))  # no castling
+
+    def test_bad_input(self):
+        self.assertEqual(self.post('place', {"coord": [9, 9, 9], "type": "Rook", "color": "white"}).status_code, 400)
+        self.assertEqual(self.post('place', {"coord": [1, 1, 0], "type": "Dragon", "color": "white"}).status_code, 400)
+        self.assertEqual(self.post('place', {"coord": [1, 1, 0], "type": "Rook", "color": "red"}).status_code, 400)
+        self.assertEqual(self.post('setup', {"pieces": [{"coord": [1, 1]}]}).status_code, 400)
+        self.assertEqual(self.post('turn', {"player": "green"}).status_code, 400)
+
+
 if __name__ == '__main__':
     unittest.main()

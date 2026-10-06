@@ -54,6 +54,16 @@ class GameState:
         
     # ==================== GAME MANAGEMENT ====================
     
+    def reset_tracking(self):
+        """Call after editing the board directly (sandbox): re-find the kings and forget history"""
+        white_kings = self.find_piece_by_type(King, white)
+        black_kings = self.find_piece_by_type(King, black)
+        self.white_king_pos = white_kings[0][0] if white_kings else None
+        self.black_king_pos = black_kings[0][0] if black_kings else None
+        self.move_history = []
+        self._undo_stack = []
+        self.pending_promotion = None
+    
     def switch_turn(self):
         """Switch from white to black or black to white"""
         if self.current_player == white:
@@ -96,8 +106,15 @@ class GameState:
     def _execute_move(self, from_coord, to_coord):
         """Internal: Execute move without validation or side effects"""
         # Remove captured piece if exists
-        if self.board.get_piece(to_coord) is not None:
+        captured_piece = self.board.get_piece(to_coord)
+        if captured_piece is not None:
             self.board.remove_piece(to_coord)
+            # Only possible in sandbox positions: a captured king is no longer tracked
+            if isinstance(captured_piece, King):
+                if captured_piece.color == white:
+                    self.white_king_pos = None
+                else:
+                    self.black_king_pos = None
         
         # Move the piece
         self.board.move_piece(from_coord, to_coord)
@@ -281,6 +298,10 @@ class GameState:
             king_pos = self.white_king_pos
         else:
             king_pos = self.black_king_pos
+        
+        # Sandbox positions may have no king at all
+        if king_pos is None:
+            return False
         
         # Get all opponent pieces
         opponent_color = black if color == white else white
@@ -480,6 +501,9 @@ class GameState:
         else:
             king_coord = self.black_king_pos
         
+        if king_coord is None:
+            return []
+        
         king_piece = self.board.get_piece(king_coord)
         
         # Check king conditions
@@ -593,6 +617,11 @@ class GameState:
         # Restore captured piece if any (for en passant it is not on to_coord)
         if record['captured_piece'] is not None:
             self.board.set_piece(record['captured_piece'], record['captured_coord'])
+            if isinstance(record['captured_piece'], King):
+                if record['captured_piece'].color == white:
+                    self.white_king_pos = record['captured_coord']
+                else:
+                    self.black_king_pos = record['captured_coord']
         
         # Castling: move the rook back too (it had never moved before castling)
         if record['rook'] is not None:

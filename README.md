@@ -20,6 +20,7 @@ A 3D chess variant on a 5-layer cube board. This is a **work in progress (WIP)**
 
 ### Phase 2: Frontend UI (WIP)
 - 🔄 React + Vite scaffolding (created)
+- 🔄 Temporary test bench (`cubechess-frontend/src/App.jsx`) for checking backend behavior
 - ⏳ 2D board visualization
 - ⏳ Three.js 3D rendering
 - ⏳ Move execution UI
@@ -73,6 +74,14 @@ npm install
 npm run dev
 # App runs on http://localhost:5173
 ```
+
+For now the frontend is a **temporary test bench**, not the game UI. It shows the 5 layers
+side by side, lets you place or erase any piece on any square, and highlights the legal
+moves the backend returns for the piece you click (green dot = move, red frame = capture).
+It needs the backend running; Vite proxies `/api` to port 5001.
+
+It edits the position through sandbox endpoints that are for testing only:
+`/api/debug/setup`, `/api/debug/place`, `/api/debug/remove`, `/api/debug/turn`, `/api/debug/rocks`.
 
 ---
 
