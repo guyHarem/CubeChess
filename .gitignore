@@ -23,6 +23,8 @@ eggs/
 .eggs/
 lib/
 lib64/
+# ...but the frontend's own lib folder is source code
+!cubechess-frontend/src/lib/
 parts/
 sdist/
 var/
