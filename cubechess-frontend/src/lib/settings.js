@@ -7,6 +7,25 @@ export const DEFAULT_SETTINGS = {
   showLegalMoves: true,
   allowUndo: true,
   moveLimit: 50,
+  clock: { mode: 'none', minutes: 10, increment: 0 }, // minutes and increment are used by mode 'custom'
+}
+
+export const CLOCK_PRESETS = [
+  { mode: 'none', label: 'No clock' },
+  { mode: '5', label: '5 min', initial: 300, increment: 0 },
+  { mode: '10', label: '10 min', initial: 600, increment: 0 },
+  { mode: '15+10', label: '15 min + 10 s', initial: 900, increment: 10 },
+  { mode: 'custom', label: 'Custom' },
+]
+
+// The clock part of a "new game" request: null for no clock, else seconds
+export function clockRequest(clock) {
+  if (!clock || clock.mode === 'none') return null
+  if (clock.mode === 'custom') {
+    return { initial: Math.round(Number(clock.minutes) * 60), increment: Math.round(Number(clock.increment)) }
+  }
+  const preset = CLOCK_PRESETS.find((option) => option.mode === clock.mode)
+  return preset ? { initial: preset.initial, increment: preset.increment } : null
 }
 
 const KEY = 'cubechess.settings'

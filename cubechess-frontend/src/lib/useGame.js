@@ -20,7 +20,7 @@ export function useGame() {
   const call = useCallback(async (path, body) => {
     try {
       const data = await api(path, body)
-      if (data.board) setGame(data)
+      if (data.board) setGame({ ...data, receivedAt: performance.now() })
       setError(data.success ? null : data.error)
       setSelected(null)
       setLegalMoves([])
@@ -34,10 +34,20 @@ export function useGame() {
   useEffect(() => {
     api('/game/state')
       .then((data) => {
-        setGame(data)
+        setGame({ ...data, receivedAt: performance.now() })
         setError(null)
       })
       .catch(() => setError(OFFLINE))
+  }, [])
+
+  // Re-read the game without touching the selection (used when a clock runs out)
+  const refresh = useCallback(async () => {
+    try {
+      const data = await api('/game/state')
+      setGame({ ...data, receivedAt: performance.now() })
+    } catch {
+      setError(OFFLINE)
+    }
   }, [])
 
   const select = useCallback(async (coord) => {
@@ -72,6 +82,9 @@ export function useGame() {
     error,
     clickCell,
     clearSelection,
+    refresh,
+    resign: (color) => call('/game/resign', { color }),
+    agreeDraw: () => call('/game/draw', {}),
     newGame: (options) => call('/game/new', options ?? {}),
     undo: () => call('/game/undo', {}),
     promote: (pieceType) => call('/game/promote', { coord: game.pending_promotion, piece_type: pieceType }),

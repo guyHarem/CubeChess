@@ -35,9 +35,11 @@ def parse_coord(value):
 
 @app.route('/api/game/new', methods=['POST'])
 def new_game():
-    """Start a new game. Optional body: {"rocks": true, "move_limit": 50}"""
+    """Start a new game. Optional body:
+    {"rocks": true, "move_limit": 50, "clock": {"initial": 600, "increment": 5}} (clock in seconds, omit for none)"""
     data = request.get_json(silent=True) or {}
-    response = game_manager.new_game(rocks=bool(data.get("rocks", True)), move_limit=data.get("move_limit", 50))
+    response = game_manager.new_game(rocks=bool(data.get("rocks", True)), move_limit=data.get("move_limit", 50),
+                                     clock=data.get("clock"))
     status_code = 200 if response.get("success") else 400
     return jsonify(convert_response(response)), status_code
 
@@ -133,6 +135,25 @@ def promote_pawn():
         return jsonify({"success": False, "error": "Invalid coordinate format"}), 400
 
 
+# ==================== ENDING THE GAME BY CHOICE ====================
+
+@app.route('/api/game/resign', methods=['POST'])
+def resign():
+    """Resign. Optional body: {"color": "white"}; without it the player to move resigns"""
+    data = request.get_json(silent=True) or {}
+    response = game_manager.resign(data.get("color"))
+    status_code = 200 if response.get("success") else 400
+    return jsonify(convert_response(response)), status_code
+
+
+@app.route('/api/game/draw', methods=['POST'])
+def agree_draw():
+    """Both players agreed to a draw"""
+    response = game_manager.agree_draw()
+    status_code = 200 if response.get("success") else 400
+    return jsonify(convert_response(response)), status_code
+
+
 # ==================== UNDO ====================
 
 @app.route('/api/game/undo', methods=['POST'])
@@ -154,16 +175,18 @@ def sandbox_response(response):
 
 @app.route('/api/debug/setup', methods=['POST'])
 def debug_setup():
-    """Replace the whole position: {"pieces": [{"coord", "type", "color"}], "current_player", "rocks"}"""
+    """Replace the whole position: {"pieces": [{"coord", "type", "color"}], "current_player", "rocks",
+    "size", "z_min", "z_max"}. The board defaults to the full 8, -2, 2; lessons use 5, -1, 1."""
     data = request.get_json(silent=True) or {}
     try:
-        pieces = [{"coord": parse_coord(item["coord"]), "type": item["type"], "color": item["color"]}
+        pieces = [{"coord": parse_coord(item["coord"]), "type": item["type"], "color": item.get("color")}
                   for item in data.get("pieces", [])]
-    except (TypeError, KeyError, ValueError):
+    except (TypeError, KeyError, ValueError, AttributeError):
         return jsonify({"success": False, "error": "Invalid pieces list"}), 400
     
     return sandbox_response(game_manager.setup_position(
-        pieces, data.get("current_player", "white"), bool(data.get("rocks", True))))
+        pieces, data.get("current_player", "white"), bool(data.get("rocks", True)),
+        size=data.get("size", 8), z_min=data.get("z_min", -2), z_max=data.get("z_max", 2)))
 
 
 @app.route('/api/debug/place', methods=['POST'])

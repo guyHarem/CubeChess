@@ -35,10 +35,11 @@ class RandomisedTestCase(unittest.TestCase):
     def assert_matches_reference(self, game, tag):
         """Check, kings, every legal move, checkmate and stalemate must all agree. Returns the move count."""
         board = game.board.board
+        bounds = game.board.bounds
         player = game.current_player
 
         for color in ("white", "black"):
-            self.assertEqual(game.is_in_check(color), reference.in_check(board, color), f"{tag}: check {color}")
+            self.assertEqual(game.is_in_check(color), reference.in_check(board, color, bounds), f"{tag}: check {color}")
         self.assertEqual(game.white_king_pos, reference.find_king(board, "white"), f"{tag}: white king tracker")
         self.assertEqual(game.black_king_pos, reference.find_king(board, "black"), f"{tag}: black king tracker")
 
@@ -58,11 +59,11 @@ class RandomisedTestCase(unittest.TestCase):
             engine_moves = game.get_legal_moves(coord)
             self.assertEqual(len(engine_moves), len(set(engine_moves)), f"{tag}: duplicate moves for {piece} {coord}")
             self.assertEqual(sorted(engine_moves),
-                             sorted(reference.legal_moves(board, coord, game.move_history)),
+                             sorted(reference.legal_moves(board, coord, game.move_history, bounds)),
                              f"{tag}: legal moves of {piece} at {coord}")
             total += len(engine_moves)
 
-        in_check = reference.in_check(board, player)
+        in_check = reference.in_check(board, player, bounds)
         self.assertEqual(game.is_checkmate(player), in_check and total == 0, f"{tag}: checkmate")
         self.assertEqual(game.is_stalemate(player), not in_check and total == 0, f"{tag}: stalemate")
         return total
@@ -80,7 +81,7 @@ class RandomisedTestCase(unittest.TestCase):
 
         promote_to = rng.choice(PROMOTIONS)
         play(promote_to)
-        self.assertFalse(reference.in_check(game.board.board, mover), f"{tag}: move left own king in check")
+        self.assertFalse(reference.in_check(game.board.board, mover, game.board.bounds), f"{tag}: move left own king in check")
         self.assertEqual(game.current_player, other(mover), f"{tag}: turn did not pass")
         after = snapshot(game)
 
@@ -143,6 +144,52 @@ class TestRandomPositions(RandomisedTestCase):
             self.assert_matches_reference(game, f"position seed {seed}")
             checked += 1
         self.assertGreater(checked, 150)
+
+    def test_random_positions_on_small_boards(self):
+        checked = 0
+        for seed in range(250):
+            rng = random.Random(seed)
+            size = rng.choice([4, 5, 5, 5, 6])
+            z_min, z_max = rng.choice([(-1, 1), (-1, 1), (0, 1), (-2, 0), (0, 0)])
+            game = GameState(size=size, z_min=z_min, z_max=z_max)
+            self.assertEqual(game.board.board, {})
+            free = [(x, y, z) for x in range(size) for y in range(size) for z in range(z_min, z_max + 1)]
+            rng.shuffle(free)
+            pieces = [King("white"), King("black")]
+            pieces += [self._random_piece(rng) for _ in range(rng.randint(2, 9))]
+            for piece in pieces:
+                coord = free.pop()
+                if isinstance(piece, Pawn):
+                    while coord[1] in (0, size - 1):
+                        coord = free.pop()
+                    piece.has_moved = rng.random() < 0.5
+                if isinstance(piece, (King, Rook)):
+                    piece.has_moved = True
+                game.board.board[coord] = piece
+            game.current_player = rng.choice(["white", "black"])
+            game.reset_tracking()
+            if reference.in_check(game.board.board, other(game.current_player), game.board.bounds):
+                continue
+            tag = f"small board seed {seed}"
+            total = self.assert_matches_reference(game, tag)
+            checked += 1
+
+            # Play one move and take it back, promotions included
+            if total:
+                moves = [(coord, move)
+                         for coord, _ in game.get_all_pieces_of_color(game.current_player)
+                         for move in game.get_legal_moves(coord)
+                         if not isinstance(game.board.get_piece(move), King)]
+                if moves:
+                    from_coord, to_coord = rng.choice(moves)
+                    self.play_and_undo(game, from_coord, to_coord, rng, tag)
+                    self.assert_matches_reference(game, tag + " (after)")
+        self.assertGreater(checked, 150)
+
+    @staticmethod
+    def _random_piece(rng):
+        kind = rng.choice([Queen, Rook, Bishop, Knight, Pawn, Pawn, Rock])
+        return Rock() if kind is Rock else kind(rng.choice(["white", "black"]))
 
     def test_en_passant_positions(self):
         available = 0

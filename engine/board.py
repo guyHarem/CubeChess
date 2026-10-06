@@ -2,20 +2,29 @@ from engine.pieces import King, Queen, Rook, Bishop, Knight, Pawn, Rock
 X, Y, Z = 0, 1, 2
 
 class Board:
-    def __init__(self):
+    def __init__(self, size=8, z_min=-2, z_max=2):
+        # size x size squares per layer, layers z_min..z_max (the Ground is z=0)
+        self.size = size
+        self.z_min = z_min
+        self.z_max = z_max
+        self.bounds = (size, z_min, z_max)
         self.board = dict()
-        self.init_pieces()
-        self.init_rocks()
+        # Only the full board has a starting position and rock layout;
+        # smaller boards (lessons, scenarios) start empty and are filled in
+        if self.is_standard():
+            self.init_pieces()
+            self.init_rocks()
+    
+    def is_standard(self):
+        return self.bounds == (8, -2, 2)
                         
     def is_valid_coordinate(self, coord:tuple):
-        if not ( 0 <= coord[X] <= 7 and 0 <= coord[Y] <= 7 and -2<= coord[Z] <= 2):
+        if not self.is_coordinate_in_board(coord):
             raise ValueError("Invalid coordiante")
 
     def is_coordinate_in_board(self,coord:tuple):
-        if ( 0 <= coord[X] <= 7 and 0 <= coord[Y] <= 7 and -2<= coord[Z] <= 2):
-            return True
-        else:
-            return False
+        return ( 0 <= coord[X] < self.size and 0 <= coord[Y] < self.size and
+                self.z_min <= coord[Z] <= self.z_max)
     
     def get_piece(self, coord:tuple):
         self.is_valid_coordinate(coord)

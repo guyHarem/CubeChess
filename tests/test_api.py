@@ -1,5 +1,17 @@
 import unittest
-from api.app import app
+from api.app import app, game_manager
+
+
+class FakeTime:
+    """Stands in for the manager's clock source so tests can let time pass instantly"""
+    def __init__(self):
+        self.now = 1000.0
+
+    def __call__(self):
+        return self.now
+
+    def tick(self, seconds):
+        self.now += seconds
 
 
 class TestApi(unittest.TestCase):
@@ -166,6 +178,136 @@ class TestSandboxApi(unittest.TestCase):
         self.assertEqual(self.post('place', {"coord": [1, 1, 0], "type": "Rook", "color": "red"}).status_code, 400)
         self.assertEqual(self.post('setup', {"pieces": [{"coord": [1, 1]}]}).status_code, 400)
         self.assertEqual(self.post('turn', {"player": "green"}).status_code, 400)
+
+
+class TestClockAndResults(unittest.TestCase):
+    def setUp(self):
+        self.client = app.test_client()
+        self.time = FakeTime()
+        game_manager._now = self.time
+
+    def tearDown(self):
+        import time
+        game_manager._now = time.monotonic
+        self.client.post('/api/game/new')
+
+    def new(self, **body):
+        return self.client.post('/api/game/new', json=body).get_json()
+
+    def move(self, from_coord, to_coord):
+        return self.client.post('/api/game/move', json={"from": from_coord, "to": to_coord})
+
+    def state(self):
+        return self.client.get('/api/game/state').get_json()
+
+    def test_no_clock_by_default(self):
+        data = self.new()
+        self.assertIsNone(data["clock"])
+        self.assertIsNone(data["winner"])
+        self.assertEqual(data["board_size"], {"size": 8, "z_min": -2, "z_max": 2})
+
+    def test_clock_runs_only_for_the_player_to_move(self):
+        data = self.new(clock={"initial": 300, "increment": 0})
+        self.assertEqual(data["clock"], {"initial": 300, "increment": 0, "white": 300, "black": 300, "running": None})
+        self.time.tick(40)  # nothing runs before White's first move
+        data = self.move([4, 1, 0], [4, 3, 0]).get_json()
+        self.assertEqual((data["clock"]["white"], data["clock"]["running"]), (300, "black"))
+        self.time.tick(12)
+        self.assertEqual(self.state()["clock"]["black"], 288)
+        data = self.move([4, 6, 0], [4, 4, 0]).get_json()
+        self.assertEqual((data["clock"]["black"], data["clock"]["running"]), (288, "white"))
+        self.time.tick(7)
+        self.assertEqual(self.state()["clock"]["white"], 293)
+        self.assertEqual(self.state()["clock"]["black"], 288)
+
+    def test_increment_is_added_after_each_timed_move(self):
+        self.new(clock={"initial": 60, "increment": 5})
+        self.move([4, 1, 0], [4, 3, 0])          # free first move, no increment
+        self.time.tick(10)
+        data = self.move([4, 6, 0], [4, 4, 0]).get_json()
+        self.assertEqual(data["clock"]["black"], 55)   # 60 - 10 + 5
+        self.time.tick(3)
+        data = self.move([3, 1, 0], [3, 3, 0]).get_json()
+        self.assertEqual(data["clock"]["white"], 62)   # 60 - 3 + 5
+
+    def test_running_out_of_time_loses(self):
+        self.new(clock={"initial": 30, "increment": 0})
+        self.move([4, 1, 0], [4, 3, 0])
+        self.time.tick(31)
+        data = self.state()
+        self.assertEqual((data["status"], data["winner"]), ("timeout", "white"))
+        self.assertEqual((data["clock"]["black"], data["clock"]["running"]), (0, None))
+        res = self.move([4, 6, 0], [4, 4, 0])
+        self.assertEqual(res.status_code, 400)
+        self.assertEqual(res.get_json()["error"], "The game is over")
+
+    def test_undo_puts_the_time_back(self):
+        self.new(clock={"initial": 100, "increment": 0})
+        self.move([4, 1, 0], [4, 3, 0])
+        self.time.tick(20)
+        self.move([4, 6, 0], [4, 4, 0])           # black now has 80
+        self.time.tick(5)
+        data = self.client.post('/api/game/undo').get_json()
+        self.assertEqual(data["current_player"], "black")
+        self.assertEqual((data["clock"]["black"], data["clock"]["white"], data["clock"]["running"]), (80, 100, "black"))
+        data = self.client.post('/api/game/undo').get_json()
+        self.assertEqual((data["clock"]["black"], data["clock"]["running"]), (100, None))
+
+    def test_bad_clock_settings(self):
+        for clock in ({"initial": 5}, {"initial": 60, "increment": -1}, {"initial": "x"}, "fast", {"increment": 5}):
+            self.assertEqual(self.client.post('/api/game/new', json={"clock": clock}).status_code, 400, clock)
+
+    def test_resign(self):
+        self.new(clock={"initial": 60, "increment": 0})
+        self.move([4, 1, 0], [4, 3, 0])
+        data = self.client.post('/api/game/resign').get_json()   # black is to move
+        self.assertEqual((data["status"], data["winner"]), ("resigned", "white"))
+        self.assertIsNone(data["clock"]["running"])
+        self.assertEqual(self.move([4, 6, 0], [4, 4, 0]).status_code, 400)
+        self.assertEqual(self.client.post('/api/game/resign').status_code, 400)
+        self.assertEqual(self.client.post('/api/game/draw').status_code, 400)
+        # Taking the last move back reopens the game
+        data = self.client.post('/api/game/undo').get_json()
+        self.assertEqual((data["status"], data["winner"]), ("ongoing", None))
+
+    def test_resign_for_a_named_color(self):
+        self.new()
+        data = self.client.post('/api/game/resign', json={"color": "white"}).get_json()
+        self.assertEqual((data["status"], data["winner"]), ("resigned", "black"))
+        self.assertEqual(self.client.post('/api/game/resign', json={"color": "red"}).status_code, 400)
+
+    def test_agreed_draw(self):
+        self.new()
+        data = self.client.post('/api/game/draw').get_json()
+        self.assertEqual((data["status"], data["winner"], data["draw_reason"]), ("agreed_draw", None, None))
+        self.assertEqual(self.move([4, 1, 0], [4, 3, 0]).status_code, 400)
+        self.assertEqual(self.new()["status"], "ongoing")
+
+
+class TestSmallBoardApi(unittest.TestCase):
+    def setUp(self):
+        self.client = app.test_client()
+
+    def tearDown(self):
+        self.client.post('/api/game/new')
+
+    def test_lesson_board(self):
+        data = self.client.post('/api/debug/setup', json={"size": 5, "z_min": -1, "z_max": 1, "pieces": [
+            {"coord": [2, 2, 0], "type": "Knight", "color": "white"},
+            {"coord": [0, 0, -1], "type": "Rock"}]}).get_json()
+        self.assertEqual(data["board_size"], {"size": 5, "z_min": -1, "z_max": 1})
+        self.assertEqual(data["board"], {"[2, 2, 0]": "Knight(white)", "[0, 0, -1]": "Rock"})
+        moves = self.client.get('/api/game/legal-moves', query_string={"from": "[2,2,0]"}).get_json()["legal_moves"]
+        self.assertEqual(len(moves), 16)
+        res = self.client.post('/api/game/move', json={"from": [2, 2, 0], "to": [2, 4, 1]})
+        self.assertEqual(res.status_code, 200)
+        # Off the small board
+        self.assertEqual(self.client.post('/api/game/move', json={"from": [2, 4, 1], "to": [3, 6, 1]}).status_code, 400)
+
+    def test_bad_board_sizes(self):
+        for body in ({"size": 3}, {"size": 9}, {"z_min": 1}, {"z_max": 3}, {"size": "5"},
+                     {"size": 5, "z_min": -1, "z_max": 1, "pieces": [{"coord": [5, 0, 0], "type": "Rook", "color": "white"}]}):
+            self.assertEqual(self.client.post('/api/debug/setup', json=body).status_code, 400, body)
 
 
 if __name__ == '__main__':

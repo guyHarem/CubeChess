@@ -318,6 +318,53 @@ class TestDraw(unittest.TestCase):
         self.assertFalse(game.is_insufficient_material())
 
 
+class TestSmallBoard(unittest.TestCase):
+    def small(self, pieces, current_player="white"):
+        game = GameState(size=5, z_min=-1, z_max=1)
+        for coord, piece in pieces.items():
+            game.board.set_piece(piece, coord)
+        game.current_player = current_player
+        game.reset_tracking()
+        return game
+
+    def test_small_board_starts_empty_with_its_own_bounds(self):
+        game = GameState(size=5, z_min=-1, z_max=1)
+        self.assertEqual(game.board.board, {})
+        self.assertEqual(game.board.bounds, (5, -1, 1))
+        self.assertIsNone(game.white_king_pos)
+        with self.assertRaises(ValueError):
+            game.board.get_piece((5, 0, 0))
+        with self.assertRaises(ValueError):
+            game.board.get_piece((0, 0, 2))
+
+    def test_knight_in_the_centre_has_16_moves(self):
+        game = self.small({(2, 2, 0): Knight("white")})
+        moves = game.get_legal_moves((2, 2, 0))
+        self.assertEqual(len(moves), 16)
+        self.assertTrue(all(0 <= x < 5 and 0 <= y < 5 and -1 <= z <= 1 for x, y, z in moves))
+
+    def test_rook_and_queen_stop_at_the_small_edges(self):
+        game = self.small({(0, 0, 0): Rook("white"), (2, 2, 0): Queen("black")})
+        self.assertEqual(len(game.get_legal_moves((0, 0, 0))), 4 + 4 + 2)  # rank, file, up and down
+        game.current_player = "black"
+        self.assertTrue(all(0 <= x < 5 and 0 <= y < 5 and -1 <= z <= 1
+                            for x, y, z in game.get_legal_moves((2, 2, 0))))
+
+    def test_pawn_promotes_on_the_last_rank_of_a_small_board(self):
+        game = self.small({(0, 0, 0): King("white"), (4, 4, 1): King("black"),
+                           (2, 3, 0): moved(Pawn("white")), (2, 1, 0): moved(Pawn("black"))})
+        game.make_move((2, 3, 0), (2, 4, 0))
+        self.assertEqual(game.pending_promotion, (2, 4, 0))
+        game.promote_pawn((2, 4, 0), Queen("white"))
+        game.make_move((2, 1, 0), (2, 0, 0))
+        self.assertEqual(game.pending_promotion, (2, 0, 0))
+
+    def test_checkmate_on_a_small_board(self):
+        game = self.small({(0, 0, -1): King("white"), (2, 2, -1): King("black"),
+                           (1, 1, -1): Queen("black"), (0, 3, 0): Rook("black")})
+        self.assertTrue(game.is_checkmate("white"))
+
+
 # Both knights go out and come back: after these 4 moves the position repeats
 KNIGHT_DANCE = [((1, 0, 0), (2, 2, 0)), ((1, 7, 0), (2, 5, 0)),
                 ((2, 2, 0), (1, 0, 0)), ((2, 5, 0), (1, 7, 0))]

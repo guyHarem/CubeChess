@@ -4,7 +4,7 @@ import Logo from '../components/Logo.jsx'
 import { api } from '../lib/api.js'
 import { START_BOARD } from '../lib/chess.js'
 import { navigate } from '../lib/router.js'
-import { loadSettings, saveSettings } from '../lib/settings.js'
+import { CLOCK_PRESETS, clockRequest, loadSettings, saveSettings } from '../lib/settings.js'
 
 function Choice({ selected, disabled, onClick, title, hint, children }) {
   return (
@@ -41,6 +41,19 @@ export default function Setup() {
 
   const limit = Number(settings.moveLimit)
   const limitValid = Number.isInteger(limit) && limit >= 10 && limit <= 200
+  const clock = settings.clock
+  const setClock = (patch) => set({ clock: { ...clock, ...patch } })
+  const minutes = Number(clock.minutes)
+  const increment = Number(clock.increment)
+  const clockValid =
+    clock.mode !== 'custom' ||
+    (Number.isFinite(minutes) && minutes >= 1 && minutes <= 180 && Number.isInteger(increment) && increment >= 0 && increment <= 60)
+  const clockSummary =
+    clock.mode === 'none'
+      ? 'No clock.'
+      : clock.mode === 'custom'
+        ? `${clock.minutes} min each${increment > 0 ? `, plus ${increment} s a move` : ''}.`
+        : `${CLOCK_PRESETS.find((option) => option.mode === clock.mode).label} each.`
   const previewSide = sideChoice === 'black' ? 'black' : 'white'
   const previewBoard = settings.rocks
     ? START_BOARD
@@ -50,7 +63,7 @@ export default function Setup() {
     setStarting(true)
     const side = sideChoice === 'random' ? (Math.random() < 0.5 ? 'white' : 'black') : sideChoice
     try {
-      const data = await api('/game/new', { rocks: settings.rocks, move_limit: limit })
+      const data = await api('/game/new', { rocks: settings.rocks, move_limit: limit, clock: clockRequest(clock) })
       if (!data.success) throw new Error(data.error)
       saveSettings({ ...settings, side, moveLimit: limit })
       navigate('/game')
@@ -102,6 +115,55 @@ export default function Setup() {
           </fieldset>
 
           <fieldset>
+            <legend>Clock</legend>
+            <div className="choices">
+              {CLOCK_PRESETS.map((option) => (
+                <Choice
+                  key={option.mode}
+                  selected={clock.mode === option.mode}
+                  onClick={() => setClock({ mode: option.mode })}
+                  title={option.label}
+                />
+              ))}
+            </div>
+            {clock.mode === 'custom' && (
+              <div className="switches">
+                <div className="field">
+                  <label htmlFor="clock-minutes">Minutes each</label>
+                  <input
+                    id="clock-minutes"
+                    type="number"
+                    min="1"
+                    max="180"
+                    value={clock.minutes}
+                    aria-invalid={!clockValid}
+                    aria-describedby="clock-help"
+                    onChange={(event) => setClock({ minutes: event.target.value })}
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="clock-increment">Seconds added per move</label>
+                  <input
+                    id="clock-increment"
+                    type="number"
+                    min="0"
+                    max="60"
+                    value={clock.increment}
+                    aria-invalid={!clockValid}
+                    aria-describedby="clock-help"
+                    onChange={(event) => setClock({ increment: event.target.value })}
+                  />
+                </div>
+              </div>
+            )}
+            <p id="clock-help" className={`help ${clockValid ? '' : 'help-error'}`}>
+              {clockValid
+                ? 'Each clock runs only on that player\'s turn and starts after White\'s first move. Run out of time and you lose.'
+                : 'Minutes from 1 to 180, added seconds a whole number from 0 to 60.'}
+            </p>
+          </fieldset>
+
+          <fieldset>
             <legend>Rules and help</legend>
             <div className="switches">
               <Switch label="Rocks in the dungeon" checked={settings.rocks} onChange={(rocks) => set({ rocks })} />
@@ -135,7 +197,7 @@ export default function Setup() {
           {error && <p className="banner-error">{error}</p>}
 
           <div className="setup-actions">
-            <button type="button" className="button button-primary button-large" disabled={!limitValid || starting} onClick={start}>
+            <button type="button" className="button button-primary button-large" disabled={!limitValid || !clockValid || starting} onClick={start}>
               {starting ? 'Starting' : 'Start game'}
             </button>
             <a className="bar-link" href="#/">
@@ -152,7 +214,7 @@ export default function Setup() {
             <strong>Two players on this screen</strong>
             {sideChoice === 'random' ? 'A coin flip decides which side sits nearest.' : `${previewSide === 'white' ? 'White' : 'Black'} sits nearest. White moves first.`}
             <br />
-            {settings.rocks ? 'Rocks on.' : 'Rocks off.'} {settings.allowUndo ? 'Undo allowed.' : 'No undo.'}
+            {clockSummary} {settings.rocks ? 'Rocks on.' : 'Rocks off.'} {settings.allowUndo ? 'Undo allowed.' : 'No undo.'}
           </p>
         </aside>
       </main>

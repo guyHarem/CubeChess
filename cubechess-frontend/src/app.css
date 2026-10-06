@@ -658,8 +658,28 @@ legend {
 }
 
 .player-note {
+  margin-top: -4px;
   font-size: 13px;
   color: var(--muted);
+}
+
+.clock {
+  min-width: 68px;
+  padding: 2px 8px;
+  border-radius: 8px;
+  background: var(--bg);
+  font: 700 19px var(--mono);
+  text-align: right;
+  color: var(--muted);
+}
+
+.clock.is-running {
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+}
+
+.clock.is-low {
+  color: #ff8d85;
 }
 
 .is-to-move .player-note {

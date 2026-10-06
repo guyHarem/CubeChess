@@ -34,14 +34,6 @@ export function boardItems(board) {
   return Object.entries(board ?? {}).map(([key, value]) => ({ key, coord: JSON.parse(key), ...parsePiece(value) }))
 }
 
-export function materialOf(board) {
-  const totals = { white: 0, black: 0 }
-  for (const item of boardItems(board)) {
-    if (item.color) totals[item.color] += PIECE_VALUES[item.type] ?? 0
-  }
-  return totals
-}
-
 // Piece types each side has captured, most valuable first
 export function capturedBy(history) {
   const taken = { white: [], black: [] }
@@ -52,6 +44,19 @@ export function capturedBy(history) {
   }
   for (const list of Object.values(taken)) list.sort((a, b) => PIECE_VALUES[b] - PIECE_VALUES[a])
   return taken
+}
+
+// Total value of the pieces each side has captured
+export function capturedPoints(taken) {
+  const sum = (types) => types.reduce((total, type) => total + PIECE_VALUES[type], 0)
+  return { white: sum(taken.white), black: sum(taken.black) }
+}
+
+// Layers of a board from the API's board_size, top to bottom
+export function layersOf(boardSize) {
+  const layers = []
+  for (let z = boardSize.z_max; z >= boardSize.z_min; z--) layers.push(z)
+  return layers
 }
 
 const squareName = ([x, y]) => `${FILES[x]}${y + 1}`

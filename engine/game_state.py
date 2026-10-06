@@ -8,11 +8,12 @@ class GameState:
     
     # ==================== INITIALIZATION & UTILITIES ====================
     
-    def __init__(self, move_limit=50):
-        self.board = Board()
+    def __init__(self, move_limit=50, size=8, z_min=-2, z_max=2):
+        self.board = Board(size, z_min, z_max)
         self.current_player = white
-        self.white_king_pos = (4,0,0) # white king init tile
-        self.black_king_pos = (4,7,0) # black king init tile
+        # King tiles (None on a board that starts empty; reset_tracking() finds them later)
+        self.white_king_pos = (4,0,0) if self.board.is_standard() else None
+        self.black_king_pos = (4,7,0) if self.board.is_standard() else None
         self.move_history = [] # (move,what happened)
         self._undo_stack = [] # one record per move_history entry, holds the real piece objects
         self.pending_promotion = None # coord of a pawn waiting for promote_pawn()
@@ -291,9 +292,9 @@ class GameState:
         """Check if a piece can attack a square (with path blocking)"""
         # Get possible attack moves
         if isinstance(piece, Pawn):
-            possible_moves = piece.get_possible_moves(from_coord)[1]  # captures only
+            possible_moves = piece.get_possible_moves(from_coord, self.board.bounds)[1]  # captures only
         else:
-            possible_moves = piece.get_possible_moves(from_coord)
+            possible_moves = piece.get_possible_moves(from_coord, self.board.bounds)
         
         # Check if the target is attackable
         if to_coord not in possible_moves:
@@ -381,7 +382,7 @@ class GameState:
         
         # Pawn has different logic than other pieces
         if isinstance(piece, Pawn):
-            possible_moves, possible_captures = piece.get_possible_moves(from_coord)
+            possible_moves, possible_captures = piece.get_possible_moves(from_coord, self.board.bounds)
             
             # Process Pawn moves: must be empty squares
             for possible_move in possible_moves:
@@ -408,7 +409,7 @@ class GameState:
         
         # Non-Pawn pieces
         else:
-            possible_moves = piece.get_possible_moves(from_coord)
+            possible_moves = piece.get_possible_moves(from_coord, self.board.bounds)
             can_jump = isinstance(piece, (Knight, King))  # King only moves 1 step
             
             for possible_move in possible_moves:
@@ -459,7 +460,7 @@ class GameState:
         
         # Logic to check piece color and if reached end line
         if piece.color == white:
-            if coord[Y] == 7:
+            if coord[Y] == self.board.size - 1:
                 return True
         if piece.color == black:
             if coord[Y] == 0:
@@ -608,7 +609,7 @@ class GameState:
             return []
         
         # Our pawn must be able to capture onto the skipped square
-        if skipped not in pawn.get_possible_moves(pawn_coord)[1]:
+        if skipped not in pawn.get_possible_moves(pawn_coord, self.board.bounds)[1]:
             return []
         
         # Capturing must not leave our own king in check

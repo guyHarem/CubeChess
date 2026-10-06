@@ -11,6 +11,7 @@ A 3D chess variant on a 5-layer cube board. This is a **work in progress (WIP)**
   - Check, Checkmate, Stalemate detection
   - Undo/Move history
   - Draw detection (stalemate, threefold repetition, 50-move limit, insufficient material)
+  - Any board size from 4×4 to 8×8 with 1 to 5 layers
   
 - ✅ **Flask API** (`api/`) — RESTful backend
   - GameManager wrapper layer
@@ -21,8 +22,8 @@ A 3D chess variant on a 5-layer cube board. This is a **work in progress (WIP)**
 ### Phase 2: Frontend UI (WIP)
 - ✅ Home page, game setup and the game screen (local two-player)
 - ✅ Three.js 3D board: cube-shaped cells, 3D pieces, layer tools, camera controls
-- ✅ Move list, material count, captured pieces, undo, resign and draw by agreement
-- ⏳ Lessons, scenarios, clocks, computer opponent, online play
+- ✅ Move list, captured material, chess clock with increment, undo, resign and draw by agreement
+- ⏳ Lessons, scenarios, computer opponent, online play
 - 🔧 Developer test bench at `#/bench` for checking backend behavior
 
 ### Phase 3: Polish & Deployment (Not Started)
@@ -90,17 +91,19 @@ The test bench edits positions through sandbox endpoints that are for testing on
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/api/game/new` | POST | Start new game. Optional body: `{"rocks": true, "move_limit": 50}` |
+| `/api/game/new` | POST | Start new game. Optional body: `{"rocks": true, "move_limit": 50, "clock": {"initial": 600, "increment": 5}}` |
 | `/api/game/state` | GET | Get current board state |
 | `/api/game/move` | POST | Execute a move |
 | `/api/game/legal-moves` | GET | Get legal moves for piece |
 | `/api/game/promote` | POST | Promote pawn |
-| `/api/game/undo` | POST | Undo last move |
+| `/api/game/undo` | POST | Undo last move (also reopens a game ended by resignation, agreement or timeout) |
+| `/api/game/resign` | POST | Resign. Optional body: `{"color": "white"}`; default is the player to move |
+| `/api/game/draw` | POST | Both players agreed to a draw |
 
 Coordinates are `[x, y, z]` lists. Every game-state response carries `current_player`,
 `board` (`{"[4, 0, 0]": "King(white)", ...}`), `status` (`ongoing`, `check`, `checkmate`,
-`stalemate`, `draw`), `draw_reason`, `halfmove_clock`, `move_limit`, `pending_promotion`
-and `move_history`. Failed requests return
+`stalemate`, `draw`, `resigned`, `agreed_draw`, `timeout`), `winner`, `draw_reason`,
+`halfmove_clock`, `move_limit`, `clock`, `board_size`, `pending_promotion` and `move_history`. Failed requests return
 HTTP 400 with `success: false` and an `error` message.
 
 **Draws:** `draw_reason` is `null` or one of `stalemate`, `repetition` (the same position
@@ -108,6 +111,17 @@ occurred three times), `move_limit` (`move_limit` moves by each player, 50 by de
 no capture and no pawn move; `halfmove_clock` counts the single moves so far) or
 `insufficient_material`. Draws are reported automatically; the engine itself does not block
 further moves after one, so the UI decides when to stop the game.
+
+**Clock:** `clock` is `null` for an untimed game, otherwise
+`{"initial", "increment", "white", "black", "running"}` in seconds. A player's clock runs only
+on their turn and starts after White's first move; `increment` is added after each timed move.
+When the player to move runs out, `status` becomes `timeout` and the opponent is the `winner`.
+Undo puts the clocks back to where they were before that turn.
+
+**Board size:** the engine works on any board from 4×4 to 8×8 with layers between -2 and 2.
+`board_size` is `{"size", "z_min", "z_max"}`. A normal game is always 8, -2, 2; smaller boards
+(5, -1, 1 for lessons) start empty and are filled through `/api/debug/setup`, which accepts
+`size`, `z_min` and `z_max`.
 
 **Promotion:** when a pawn reaches the last rank, `pending_promotion` holds its coordinate
 and the turn does not pass until `/api/game/promote` is called with

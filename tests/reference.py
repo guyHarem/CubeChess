@@ -18,8 +18,11 @@ def name(piece):
     return type(piece).__name__
 
 
-def inside(c):
-    return 0 <= c[0] <= 7 and 0 <= c[1] <= 7 and -2 <= c[2] <= 2
+FULL = (8, -2, 2)  # (files and ranks, lowest layer, highest layer)
+
+
+def inside(c, bounds=FULL):
+    return 0 <= c[0] < bounds[0] and 0 <= c[1] < bounds[0] and bounds[1] <= c[2] <= bounds[2]
 
 
 def add(c, d, n=1):
@@ -35,7 +38,7 @@ def enemy(board, coord, color):
     return piece is not None and name(piece) != "Rock" and piece.color != color
 
 
-def attacked_squares(board, coord):
+def attacked_squares(board, coord, bounds=FULL):
     """Squares the piece on coord attacks (occupied or not)"""
     piece = board[coord]
     kind = name(piece)
@@ -51,16 +54,16 @@ def attacked_squares(board, coord):
         dirs = {"Rook": ROOK_DIRS, "Bishop": BISHOP_DIRS, "Queen": ROOK_DIRS + BISHOP_DIRS}[kind]
         for d in dirs:
             square = add(coord, d)
-            while inside(square):
+            while inside(square, bounds):
                 out.append(square)
                 if square in board:
                     break
                 square = add(square, d)
-    return [c for c in out if inside(c)]
+    return [c for c in out if inside(c, bounds)]
 
 
-def is_attacked(board, square, by_color):
-    return any(name(p) != "Rock" and p.color == by_color and square in attacked_squares(board, c)
+def is_attacked(board, square, by_color, bounds=FULL):
+    return any(name(p) != "Rock" and p.color == by_color and square in attacked_squares(board, c, bounds)
                for c, p in board.items())
 
 
@@ -71,10 +74,10 @@ def find_king(board, color):
     return None
 
 
-def in_check(board, color):
+def in_check(board, color, bounds=FULL):
     king = find_king(board, color)
     other = "black" if color == "white" else "white"
-    return king is not None and is_attacked(board, king, other)
+    return king is not None and is_attacked(board, king, other, bounds)
 
 
 def en_passant_square(history):
@@ -90,7 +93,7 @@ def en_passant_square(history):
     return tuple((a[i] + b[i]) // 2 for i in range(3)), tuple(b)
 
 
-def legal_moves(board, coord, history):
+def legal_moves(board, coord, history, bounds=FULL):
     """All legal destinations for the piece on coord"""
     piece = board[coord]
     kind, color = name(piece), piece.color
@@ -101,19 +104,19 @@ def legal_moves(board, coord, history):
         d = forward(color)
         for dz in (-1, 0, 1):
             one = add(coord, (0, d, dz))
-            if inside(one) and one not in board:
+            if inside(one, bounds) and one not in board:
                 candidates.append((one, None))
                 two = add(coord, (0, d, dz), 2)
-                if not piece.has_moved and inside(two) and two not in board:
+                if not piece.has_moved and inside(two, bounds) and two not in board:
                     candidates.append((two, None))
-        for square in attacked_squares(board, coord):
+        for square in attacked_squares(board, coord, bounds):
             if enemy(board, square, color):
                 candidates.append((square, None))
         ep = en_passant_square(history)
-        if ep and ep[0] in attacked_squares(board, coord) and enemy(board, ep[1], color):
+        if ep and ep[0] in attacked_squares(board, coord, bounds) and enemy(board, ep[1], color):
             candidates.append((ep[0], ep[1]))
     else:
-        for square in attacked_squares(board, coord):
+        for square in attacked_squares(board, coord, bounds):
             if square not in board or enemy(board, square, color):
                 candidates.append((square, None))
 
@@ -124,11 +127,11 @@ def legal_moves(board, coord, history):
         if also_empty:
             del after[also_empty]
         after[dest] = piece
-        if not in_check(after, color):
+        if not in_check(after, color, bounds):
             moves.append(dest)
 
-    if kind == "King" and not piece.has_moved and not in_check(board, color):
-        for rook_x, step in ((7, 1), (0, -1)):
+    if kind == "King" and not piece.has_moved and not in_check(board, color, bounds):
+        for rook_x, step in ((bounds[0] - 1, 1), (0, -1)):
             rook = board.get((rook_x, coord[1], coord[2]))
             if rook is None or name(rook) != "Rook" or rook.color != color or rook.has_moved:
                 continue
@@ -136,7 +139,7 @@ def legal_moves(board, coord, history):
             if any((x, coord[1], coord[2]) in board for x in between):
                 continue
             passes = [add(coord, (step, 0, 0)), add(coord, (step, 0, 0), 2)]
-            if not any(is_attacked(board, square, other) for square in passes):
+            if not any(is_attacked(board, square, other, bounds) for square in passes):
                 moves.append(passes[1])
 
     return moves

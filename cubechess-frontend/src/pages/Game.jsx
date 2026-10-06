@@ -1,27 +1,26 @@
 import { useState } from 'react'
+import Clock from '../components/Clock.jsx'
 import CubeBoard from '../components/CubeBoard.jsx'
 import Dialog from '../components/Dialog.jsx'
 import LayerMap from '../components/LayerMap.jsx'
 import Logo from '../components/Logo.jsx'
 import MoveList from '../components/MoveList.jsx'
 import PlayerCard from '../components/PlayerCard.jsx'
-import { FULL_BOARD, LAYERS, capturedBy, keyOf, layerOf, materialOf, otherColor, parsePiece } from '../lib/chess.js'
-import { loadSettings } from '../lib/settings.js'
+import { FULL_BOARD, LAYERS, capturedBy, capturedPoints, keyOf, layerOf, layersOf, otherColor, parsePiece } from '../lib/chess.js'
+import { clockRequest, loadSettings } from '../lib/settings.js'
 import { useGame } from '../lib/useGame.js'
 
 const NAMES = { white: 'White', black: 'Black' }
 const PROMOTIONS = ['Queen', 'Rook', 'Bishop', 'Knight']
 
 // How the game ended, as a headline and one line of detail. null while it is still going.
-function outcomeOf(game, local) {
-  if (local?.kind === 'resigned') {
-    return { title: `${NAMES[otherColor(local.by)]} wins`, detail: `${NAMES[local.by]} resigned.` }
-  }
-  if (local?.kind === 'agreed') return { title: 'Draw', detail: 'Both players agreed to a draw.' }
+function outcomeOf(game) {
   if (!game) return null
-  if (game.status === 'checkmate') {
-    return { title: `${NAMES[otherColor(game.current_player)]} wins`, detail: 'Checkmate.' }
-  }
+  const wins = game.winner ? `${NAMES[game.winner]} wins` : 'Draw'
+  if (game.status === 'checkmate') return { title: wins, detail: 'Checkmate.' }
+  if (game.status === 'resigned') return { title: wins, detail: `${NAMES[otherColor(game.winner)]} resigned.` }
+  if (game.status === 'timeout') return { title: wins, detail: `${NAMES[otherColor(game.winner)]} ran out of time.` }
+  if (game.status === 'agreed_draw') return { title: 'Draw', detail: 'Both players agreed to a draw.' }
   const reasons = {
     stalemate: `${NAMES[game.current_player]} has no legal move and is not in check.`,
     repetition: 'The same position came up three times.',
@@ -32,7 +31,7 @@ function outcomeOf(game, local) {
 }
 
 export default function Game() {
-  const { game, selected, legalMoves, error, clickCell, newGame, undo, promote } = useGame()
+  const { game, selected, legalMoves, error, clickCell, newGame, undo, promote, resign, agreeDraw, refresh } = useGame()
   const [settings] = useState(loadSettings)
   const [side, setSide] = useState(settings.side)
   const [activeLayer, setActiveLayer] = useState(0)
@@ -40,15 +39,17 @@ export default function Game() {
   const [solo, setSolo] = useState(false)
   const [command, setCommand] = useState(null)
   const [asking, setAsking] = useState(null) // 'resign' | 'draw'
-  const [local, setLocal] = useState(null) // an ending the server does not know about
   const [resultSeen, setResultSeen] = useState(false)
 
   const board = game?.board ?? {}
   const history = game?.move_history ?? []
   const player = game?.current_player ?? 'white'
-  const outcome = outcomeOf(game, local)
-  const material = materialOf(board)
+  const outcome = outcomeOf(game)
   const captured = capturedBy(history)
+  const points = capturedPoints(captured)
+  const size = game?.board_size?.size ?? FULL_BOARD.size
+  const layers = game?.board_size ? layersOf(game.board_size) : FULL_BOARD.layers
+  const shownLayer = layers.includes(activeLayer) ? activeLayer : 0
   const quiet = game ? Math.floor(game.halfmove_clock / 2) : 0
 
   const send = (type, direction) => setCommand({ id: Date.now(), type, direction })
@@ -63,14 +64,12 @@ export default function Game() {
   }
 
   function restart() {
-    setLocal(null)
     setResultSeen(false)
     setAsking(null)
-    newGame({ rocks: settings.rocks, move_limit: settings.moveLimit })
+    newGame({ rocks: settings.rocks, move_limit: settings.moveLimit, clock: clockRequest(settings.clock) })
   }
 
   function takeBack() {
-    setLocal(null)
     setResultSeen(false)
     undo()
   }
@@ -81,9 +80,10 @@ export default function Game() {
       name={color === 'white' ? 'Player 1' : 'Player 2'}
       toMove={!outcome && player === color}
       note={!outcome && player === color && game?.status === 'check' ? 'Your move, in check' : undefined}
-      material={material[color]}
-      lead={material[color] - material[otherColor(color)]}
+      points={points[color]}
+      lead={points[color] - points[otherColor(color)]}
       captured={captured[color]}
+      clock={game?.clock && <Clock clock={game.clock} color={color} receivedAt={game.receivedAt} onFlag={refresh} />}
     />
   )
 
@@ -137,13 +137,13 @@ export default function Game() {
 
         <section className="game-centre">
           <div className="layer-picker" role="group" aria-label="Current layer">
-            {LAYERS.map((layer) => (
+            {LAYERS.filter((layer) => layers.includes(layer.z)).map((layer) => (
               <button
                 key={layer.z}
                 type="button"
-                className={`button layer-button ${activeLayer === layer.z ? 'is-selected' : ''}`}
-                aria-pressed={activeLayer === layer.z}
-                style={activeLayer === layer.z ? { background: layer.light, borderColor: layer.light } : undefined}
+                className={`button layer-button ${shownLayer === layer.z ? 'is-selected' : ''}`}
+                aria-pressed={shownLayer === layer.z}
+                style={shownLayer === layer.z ? { background: layer.light, borderColor: layer.light } : undefined}
                 onClick={() => setActiveLayer(layer.z)}
               >
                 <i className="swatch" style={{ background: layer.dark }} />
@@ -155,9 +155,9 @@ export default function Game() {
           <div className="board-frame">
             <CubeBoard
               board={board}
-              size={FULL_BOARD.size}
-              layers={FULL_BOARD.layers}
-              activeLayer={activeLayer}
+              size={size}
+              layers={layers}
+              activeLayer={shownLayer}
               selected={selected}
               legalMoves={legalMoves}
               showMoveBalls={settings.showLegalMoves}
@@ -190,7 +190,7 @@ export default function Game() {
                       type="button"
                       className="button button-danger"
                       onClick={() => {
-                        setLocal({ kind: 'resigned', by: player })
+                        resign(player)
                         setAsking(null)
                       }}
                     >
@@ -215,7 +215,7 @@ export default function Game() {
                       type="button"
                       className="button button-primary"
                       onClick={() => {
-                        setLocal({ kind: 'agreed' })
+                        agreeDraw()
                         setAsking(null)
                       }}
                     >
@@ -271,11 +271,11 @@ export default function Game() {
 
         <aside className="game-right">
           <section>
-            <h2>{layerOf(activeLayer).name}, seen from above</h2>
+            <h2>{layerOf(shownLayer).name}, seen from above</h2>
             <LayerMap
               board={board}
-              size={FULL_BOARD.size}
-              z={activeLayer}
+              size={size}
+              z={shownLayer}
               side={side}
               selected={selected}
               legalMoves={legalMoves}
