@@ -10,7 +10,7 @@ A 3D chess variant on a 5-layer cube board. This is a **work in progress (WIP)**
   - Special moves: Castling, En Passant, Pawn Promotion
   - Check, Checkmate, Stalemate detection
   - Undo/Move history
-  - Draw detection (insufficient material)
+  - Draw detection (stalemate, threefold repetition, 50-move limit, insufficient material)
   
 - ✅ **Flask API** (`api/`) — RESTful backend
   - GameManager wrapper layer
@@ -103,8 +103,15 @@ It edits the position through sandbox endpoints that are for testing only:
 
 Coordinates are `[x, y, z]` lists. Every game-state response carries `current_player`,
 `board` (`{"[4, 0, 0]": "King(white)", ...}`), `status` (`ongoing`, `check`, `checkmate`,
-`stalemate`, `draw`), `pending_promotion` and `move_history`. Failed requests return
+`stalemate`, `draw`), `draw_reason`, `halfmove_clock`, `move_limit`, `pending_promotion`
+and `move_history`. Failed requests return
 HTTP 400 with `success: false` and an `error` message.
+
+**Draws:** `draw_reason` is `null` or one of `stalemate`, `repetition` (the same position
+occurred three times), `move_limit` (`move_limit` moves by each player, 50 by default, with
+no capture and no pawn move; `halfmove_clock` counts the single moves so far) or
+`insufficient_material`. Draws are reported automatically; the engine itself does not block
+further moves after one, so the UI decides when to stop the game.
 
 **Promotion:** when a pawn reaches the last rank, `pending_promotion` holds its coordinate
 and the turn does not pass until `/api/game/promote` is called with

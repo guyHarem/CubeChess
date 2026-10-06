@@ -17,25 +17,29 @@ class GameManager:
 
     # ==================== HELPERS ====================
 
-    def _get_status(self):
+    def _get_status(self, draw_reason):
         player = self.game.current_player
         if self.game.is_checkmate(player):
             return "checkmate"
-        elif self.game.is_stalemate(player):
+        elif draw_reason == "stalemate":
             return "stalemate"
+        elif draw_reason is not None:
+            return "draw"  # a draw ends the game even if the player is in check
         elif self.game.is_in_check(player):
             return "check"
-        elif self.game.is_draw():
-            return "draw"
         else:
             return "ongoing"
 
     def _state_response(self):
+        draw_reason = self.game.get_draw_reason()
         return {
             "success": True,
             "current_player": self.game.current_player,
             "board": self.game.get_board_state().board,
-            "status": self._get_status(),
+            "status": self._get_status(draw_reason),
+            "draw_reason": draw_reason,
+            "halfmove_clock": self.game.halfmove_clock,
+            "move_limit": self.game.move_limit,
             "pending_promotion": self.game.pending_promotion,
             "move_history": self.game.move_history
         }
@@ -180,6 +184,7 @@ class GameManager:
             if self.game.pending_promotion is not None:
                 raise ValueError("Promote the pawn before changing the turn!")
             self.game.current_player = player
+            self.game.restart_draw_tracking()
             return self._state_response()
         except ValueError as e:
             return self._error_response(e)

@@ -18,7 +18,15 @@ def custom_game(pieces, current_player="white", rocks=True):
             else:
                 game.black_king_pos = coord
     game.current_player = current_player
+    game.restart_draw_tracking()
     return game
+
+
+def shuttle(game, moves, times=1):
+    """Play a list of (from, to) moves, repeated"""
+    for _ in range(times):
+        for from_coord, to_coord in moves:
+            game.make_move(from_coord, to_coord)
 
 
 def moved(piece):
@@ -30,7 +38,8 @@ def snapshot(game):
     """Everything that undo must restore"""
     board = {c: (str(p), getattr(p, 'has_moved', None)) for c, p in game.board.board.items()}
     return (board, game.current_player, game.white_king_pos, game.black_king_pos,
-            game.pending_promotion, list(game.move_history))
+            game.pending_promotion, list(game.move_history),
+            game.halfmove_clock, list(game._position_keys))
 
 
 class TestOpeningPosition(unittest.TestCase):
@@ -307,6 +316,117 @@ class TestDraw(unittest.TestCase):
         game = custom_game({(4, 0, 0): King("white"), (4, 7, 0): King("black"),
                             (2, 0, 0): Bishop("white"), (3, 0, 0): Queen("white")})
         self.assertFalse(game.is_insufficient_material())
+
+
+# Both knights go out and come back: after these 4 moves the position repeats
+KNIGHT_DANCE = [((1, 0, 0), (2, 2, 0)), ((1, 7, 0), (2, 5, 0)),
+                ((2, 2, 0), (1, 0, 0)), ((2, 5, 0), (1, 7, 0))]
+
+
+class TestThreefoldRepetition(unittest.TestCase):
+    def test_third_occurrence_is_a_draw(self):
+        game = GameState()
+        shuttle(game, KNIGHT_DANCE)  # starting position seen twice
+        self.assertFalse(game.is_threefold_repetition())
+        self.assertIsNone(game.get_draw_reason())
+        shuttle(game, KNIGHT_DANCE)  # three times
+        self.assertTrue(game.is_threefold_repetition())
+        self.assertEqual(game.get_draw_reason(), "repetition")
+        self.assertTrue(game.is_draw())
+
+    def test_undo_takes_the_repetition_back(self):
+        game = GameState()
+        shuttle(game, KNIGHT_DANCE, times=2)
+        game.undo_move()
+        self.assertFalse(game.is_threefold_repetition())
+        game.make_move(*KNIGHT_DANCE[-1])
+        self.assertTrue(game.is_threefold_repetition())
+
+    def test_same_squares_but_other_player_to_move_is_a_different_position(self):
+        game = GameState()
+        shuttle(game, KNIGHT_DANCE[:2])
+        shuttle(game, KNIGHT_DANCE[2:] + KNIGHT_DANCE[:2], times=2)
+        # Knights-out position: reached 3 times, always with white to move
+        self.assertTrue(game.is_threefold_repetition())
+        game.make_move((6, 0, 0), (5, 2, 0))
+        self.assertFalse(game.is_threefold_repetition())
+
+    def test_lost_castling_rights_make_a_different_position(self):
+        rook_dance = [((7, 0, 0), (7, 1, 0)), ((4, 7, 0), (4, 6, 0)),
+                      ((7, 1, 0), (7, 0, 0)), ((4, 6, 0), (4, 7, 0))]
+        game = custom_game({(4, 0, 0): King("white"), (4, 7, 0): moved(King("black")),
+                            (7, 0, 0): Rook("white"), (0, 7, 1): Queen("black")})
+        self.assertIn((6, 0, 0), game.get_legal_moves((4, 0, 0)))
+        # The first position allowed castling; the rook has moved in every later one
+        shuttle(game, rook_dance, times=2)
+        self.assertFalse(game.is_threefold_repetition())
+        shuttle(game, rook_dance)
+        self.assertTrue(game.is_threefold_repetition())
+
+    def test_en_passant_option_makes_a_different_position(self):
+        game = custom_game({(4, 0, 0): moved(King("white")), (4, 7, 0): moved(King("black")),
+                            (4, 4, 0): moved(Pawn("white")), (3, 6, 0): Pawn("black"),
+                            (0, 0, 2): Knight("white"), (0, 7, 2): Knight("black")},
+                           current_player="black")
+        game.make_move((3, 6, 0), (3, 4, 0))  # en passant is possible now, and only now
+        knight_dance = [((0, 0, 2), (1, 2, 2)), ((0, 7, 2), (1, 5, 2)),
+                        ((1, 2, 2), (0, 0, 2)), ((1, 5, 2), (0, 7, 2))]
+        shuttle(game, knight_dance, times=2)
+        self.assertFalse(game.is_threefold_repetition())
+        shuttle(game, knight_dance)
+        self.assertTrue(game.is_threefold_repetition())
+
+
+class TestMoveLimit(unittest.TestCase):
+    def test_clock_counts_quiet_moves_and_restarts(self):
+        game = GameState()
+        shuttle(game, KNIGHT_DANCE[:2])
+        self.assertEqual(game.halfmove_clock, 2)
+        game.make_move((4, 1, 0), (4, 3, 0))  # pawn move
+        self.assertEqual(game.halfmove_clock, 0)
+        game.make_move((3, 6, 0), (3, 4, 0))
+        game.make_move((2, 2, 0), (3, 4, 0))  # knight takes pawn
+        self.assertEqual(game.halfmove_clock, 0)
+        game.make_move((2, 5, 0), (1, 7, 0))
+        self.assertEqual(game.halfmove_clock, 1)
+        game.undo_move()
+        game.undo_move()
+        game.undo_move()
+        game.undo_move()
+        self.assertEqual(game.halfmove_clock, 2)
+
+    def test_draw_when_limit_reached(self):
+        game = custom_game({(4, 0, 0): moved(King("white")), (4, 7, 0): moved(King("black")),
+                            (0, 0, 0): moved(Rook("white"))})
+        game.move_limit = 3
+        # Walk both kings sideways so no position repeats
+        for x in (5, 6):
+            game.make_move((x - 1, 0, 0), (x, 0, 0))
+            game.make_move((x - 1, 7, 0), (x, 7, 0))
+        self.assertIsNone(game.get_draw_reason())
+        game.make_move((6, 0, 0), (7, 0, 0))
+        game.make_move((6, 7, 0), (7, 7, 0))
+        self.assertEqual(game.halfmove_clock, 6)
+        self.assertTrue(game.is_move_limit_reached())
+        self.assertEqual(game.get_draw_reason(), "move_limit")
+        game.undo_move()
+        self.assertFalse(game.is_draw())
+
+    def test_default_limit_is_fifty_moves_each(self):
+        game = GameState()
+        self.assertEqual(game.move_limit, 50)
+        game.halfmove_clock = 99
+        self.assertFalse(game.is_move_limit_reached())
+        game.halfmove_clock = 100
+        self.assertTrue(game.is_move_limit_reached())
+
+    def test_checkmate_beats_a_draw(self):
+        game = custom_game({(0, 0, -2): King("white"), (2, 2, -2): King("black"),
+                            (1, 1, -2): Queen("black"), (0, 5, -1): Rook("black")}, rocks=False)
+        game.halfmove_clock = 100
+        self.assertTrue(game.is_checkmate("white"))
+        self.assertIsNone(game.get_draw_reason())
+        self.assertFalse(game.is_draw())
 
 
 if __name__ == '__main__':

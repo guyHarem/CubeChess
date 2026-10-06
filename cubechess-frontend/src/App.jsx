@@ -203,6 +203,10 @@ function App() {
           </label>
           <span className="status">
             Status: <strong>{game?.status ?? '…'}</strong>
+            {game?.draw_reason && game.draw_reason !== 'stalemate' && ` (${game.draw_reason.replace('_', ' ')})`}
+          </span>
+          <span className="status" title="Moves by each player since the last capture or pawn move">
+            Quiet moves: {game ? Math.floor(game.halfmove_clock / 2) : '…'} / {game?.move_limit ?? '…'}
           </span>
           {selected && (
             <span className="status">

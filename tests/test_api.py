@@ -20,6 +20,19 @@ class TestApi(unittest.TestCase):
         self.assertEqual(data["board"]["[2, 2, -1]"], "Rock")
         self.assertEqual(len(data["board"]), 32 + 16)
 
+    def test_draw_by_repetition_is_reported(self):
+        dance = [([1, 0, 0], [2, 2, 0]), ([1, 7, 0], [2, 5, 0]), ([2, 2, 0], [1, 0, 0]), ([2, 5, 0], [1, 7, 0])]
+        data = self.client.get('/api/game/state').get_json()
+        self.assertIsNone(data["draw_reason"])
+        self.assertEqual((data["halfmove_clock"], data["move_limit"]), (0, 50))
+        for from_coord, to_coord in dance + dance:
+            data = self.move(from_coord, to_coord).get_json()
+        self.assertEqual(data["status"], "draw")
+        self.assertEqual(data["draw_reason"], "repetition")
+        self.assertEqual(data["halfmove_clock"], 8)
+        data = self.client.post('/api/game/undo').get_json()
+        self.assertEqual((data["status"], data["draw_reason"]), ("ongoing", None))
+
     def test_legal_moves(self):
         res = self.client.get('/api/game/legal-moves?from=[4,1,0]')
         self.assertEqual(res.status_code, 200)

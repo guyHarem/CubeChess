@@ -21,7 +21,8 @@ def snapshot(game):
     """Everything that undo must restore"""
     board = {c: (str(p), getattr(p, 'has_moved', None)) for c, p in game.board.board.items()}
     return (board, game.current_player, game.white_king_pos, game.black_king_pos,
-            game.pending_promotion, [dict(m) for m in game.move_history])
+            game.pending_promotion, [dict(m) for m in game.move_history],
+            game.halfmove_clock, list(game._position_keys))
 
 
 def empty_game(rocks):
@@ -40,6 +41,17 @@ class RandomisedTestCase(unittest.TestCase):
             self.assertEqual(game.is_in_check(color), reference.in_check(board, color), f"{tag}: check {color}")
         self.assertEqual(game.white_king_pos, reference.find_king(board, "white"), f"{tag}: white king tracker")
         self.assertEqual(game.black_king_pos, reference.find_king(board, "black"), f"{tag}: black king tracker")
+
+        # Move-limit clock = quiet moves since the last capture or pawn move (promotions are pawn moves)
+        quiet = 0
+        for move in reversed(game.move_history):
+            if move['moving_piece'].startswith("Pawn") or move['captured_piece'] is not None:
+                break
+            quiet += 1
+        self.assertEqual(game.halfmove_clock, quiet, f"{tag}: move-limit clock")
+        # One remembered position per finished turn (a promotion is two history entries, one turn)
+        turns = sum(move['special_move'] != "promotion" for move in game.move_history)
+        self.assertEqual(len(game._position_keys), 1 + turns, f"{tag}: remembered positions")
 
         total = 0
         for coord, piece in game.get_all_pieces_of_color(player):

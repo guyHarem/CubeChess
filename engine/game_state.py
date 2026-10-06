@@ -8,7 +8,7 @@ class GameState:
     
     # ==================== INITIALIZATION & UTILITIES ====================
     
-    def __init__(self):
+    def __init__(self, move_limit=50):
         self.board = Board()
         self.current_player = white
         self.white_king_pos = (4,0,0) # white king init tile
@@ -16,6 +16,9 @@ class GameState:
         self.move_history = [] # (move,what happened)
         self._undo_stack = [] # one record per move_history entry, holds the real piece objects
         self.pending_promotion = None # coord of a pawn waiting for promote_pawn()
+        self.move_limit = move_limit # draw after this many moves by each player with no capture or pawn move
+        self.halfmove_clock = 0 # single moves (plies) since the last capture or pawn move
+        self._position_keys = [self._position_key()] # every position so far, for threefold repetition
 
     
     @staticmethod
@@ -63,6 +66,17 @@ class GameState:
         self.move_history = []
         self._undo_stack = []
         self.pending_promotion = None
+        self.restart_draw_tracking()
+    
+    def restart_draw_tracking(self):
+        """Treat the current position as the first one (repetition and move-limit counters start over)"""
+        self.halfmove_clock = 0
+        self._position_keys = [self._position_key()]
+    
+    def end_turn(self):
+        """Pass the turn and remember the new position for threefold repetition"""
+        self.switch_turn()
+        self._position_keys.append(self._position_key())
     
     def switch_turn(self):
         """Switch from white to black or black to white"""
@@ -92,6 +106,7 @@ class GameState:
             'to': to_coord,
             'piece': piece,
             'had_moved': getattr(piece, 'has_moved', None),
+            'halfmove_clock': self.halfmove_clock,
             'captured_piece': captured_piece,
             'captured_coord': captured_coord,
             'rook': rook,
@@ -148,13 +163,13 @@ class GameState:
         # Check if this is a castling move
         if isinstance(piece, King) and to_coord in self.is_castle_available(self.current_player):
             self.do_castle(from_coord, to_coord)
-            self.switch_turn()
+            self.end_turn()
             return
         
         # Check if this is an en passant move
         if isinstance(piece, Pawn) and to_coord in self.get_en_passant_moves(from_coord):
             self.do_en_passant(from_coord, to_coord)
-            self.switch_turn()
+            self.end_turn()
             return
         
         # Capture piece info before executing move
@@ -171,11 +186,17 @@ class GameState:
         if isinstance(piece, (Pawn, King, Rook)):
             piece.has_moved = True
         
+        # Captures and pawn moves can't be taken back, so they restart the move-limit count
+        if isinstance(piece, Pawn) or captured_piece is not None:
+            self.halfmove_clock = 0
+        else:
+            self.halfmove_clock += 1
+        
         # A pawn on the last rank keeps the turn until promote_pawn() is called
         if self.is_pawn_promotion(to_coord):
             self.pending_promotion = to_coord
         else:
-            self.switch_turn()
+            self.end_turn()
 
     def do_castle(self, king_from, king_to):
         """Execute a castling move"""
@@ -222,6 +243,8 @@ class GameState:
         # Mark both as moved
         king_piece.has_moved = True
         rook_piece.has_moved = True
+        
+        self.halfmove_clock += 1
     
     def do_en_passant(self, from_coord, to_coord):
         player_pawn = self.board.get_piece(from_coord)
@@ -238,6 +261,8 @@ class GameState:
         self.board.move_piece(from_coord,to_coord)
         
         player_pawn.has_moved = True
+        
+        self.halfmove_clock = 0
     
     # ==================== MOVE VALIDATION (MIDDLE LAYER) ====================
     
@@ -463,7 +488,7 @@ class GameState:
         
         # The promotion completes the turn
         self.pending_promotion = None
-        self.switch_turn()
+        self.end_turn()
         return True
         
     def is_checkmate(self, color):
@@ -607,6 +632,7 @@ class GameState:
         if record['special_move'] == "promotion":
             self.board.remove_piece(to_coord)
             self.board.set_piece(piece, to_coord)
+            self._position_keys.pop()
             self.switch_turn()
             self.pending_promotion = to_coord
             return self.undo_move()
@@ -639,10 +665,13 @@ class GameState:
             else:
                 self.black_king_pos = from_coord
         
+        self.halfmove_clock = record['halfmove_clock']
+        
         # Switch turn back (a pawn waiting for promotion never passed the turn)
         if self.pending_promotion is not None:
             self.pending_promotion = None
         else:
+            self._position_keys.pop()
             self.switch_turn()
         return True
     
@@ -714,14 +743,58 @@ class GameState:
         return is_insufficient(white, white_material) and is_insufficient(black, black_material)
     
     
-    def is_draw(self):
-        """Check if the game is a draw (stalemate or insufficient material)"""
-        # Draw by stalemate
+    # ==================== DRAW RULES ====================
+    
+    def _castling_rights(self):
+        """Coords of the rooks that could still castle one day (unmoved, next to an unmoved king)"""
+        rights = []
+        for color, king_coord in ((white, self.white_king_pos), (black, self.black_king_pos)):
+            if king_coord is None or self.board.get_piece(king_coord).has_moved:
+                continue
+            for rook_coord, rook in self.find_piece_by_type(Rook, color):
+                if not rook.has_moved and rook_coord[Y] == king_coord[Y] and rook_coord[Z] == king_coord[Z]:
+                    rights.append(rook_coord)
+        return frozenset(rights)
+    
+    def _en_passant_rights(self):
+        """The en passant captures the player to move could make right now"""
+        if self.get_en_passant_target() is None:
+            return frozenset()
+        return frozenset((pawn_coord, move)
+                         for pawn_coord, pawn in self.find_piece_by_type(Pawn, self.current_player)
+                         for move in self.get_en_passant_moves(pawn_coord))
+    
+    def _position_key(self):
+        """Two positions are 'the same' for threefold repetition when their keys are equal:
+        same pieces on the same squares, same player to move, same castling and en passant options"""
+        pieces = frozenset((coord, str(piece)) for coord, piece in self.board.board.items()
+                           if not isinstance(piece, Rock))
+        return (pieces, self.current_player, self._castling_rights(), self._en_passant_rights())
+    
+    def is_threefold_repetition(self):
+        """Check if the current position has now occurred three times"""
+        return self._position_keys.count(self._position_keys[-1]) >= 3
+    
+    def is_move_limit_reached(self):
+        """Check if both players made move_limit moves in a row with no capture and no pawn move"""
+        return self.halfmove_clock >= 2 * self.move_limit
+    
+    def get_draw_reason(self):
+        """Why the game is a draw: "stalemate", "repetition", "move_limit",
+        "insufficient_material", or None if it is not a draw"""
+        # A checkmate delivered on the very move that would trigger a draw still wins
+        if self.is_checkmate(self.current_player):
+            return None
         if self.is_stalemate(self.current_player):
-            return True
-        
-        # Draw by insufficient material
+            return "stalemate"
+        if self.is_threefold_repetition():
+            return "repetition"
+        if self.is_move_limit_reached():
+            return "move_limit"
         if self.is_insufficient_material():
-            return True
-        
-        return False
+            return "insufficient_material"
+        return None
+    
+    def is_draw(self):
+        """Check if the game is a draw (see get_draw_reason)"""
+        return self.get_draw_reason() is not None
