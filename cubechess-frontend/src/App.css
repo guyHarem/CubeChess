@@ -233,3 +233,28 @@ h1 {
   font-family: ui-monospace, 'SF Mono', Menlo, monospace;
   font-size: 13px;
 }
+
+/* ---------- 3D view ---------- */
+
+.scene {
+  height: 72vh;
+  min-height: 420px;
+  margin-top: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--scene);
+  overflow: hidden;
+}
+
+.label.inline {
+  width: auto;
+  margin-left: 14px;
+}
+
+.group .note {
+  margin-left: 10px;
+}
+
+.layers[hidden] {
+  display: none;
+}

@@ -80,6 +80,11 @@ side by side, lets you place or erase any piece on any square, and highlights th
 moves the backend returns for the piece you click (green dot = move, red frame = capture).
 It needs the backend running; Vite proxies `/api` to port 5001.
 
+The default view is 3D (Three.js): the layers are stacked and semi-transparent, drag rotates,
+right-drag pans, scroll zooms. "Current plane" picks the layer drawn solid; its squares and
+pieces take click priority over other layers, and legal-move markers are always clickable.
+A 2D view with the layers side by side is one button away.
+
 It edits the position through sandbox endpoints that are for testing only:
 `/api/debug/setup`, `/api/debug/place`, `/api/debug/remove`, `/api/debug/turn`, `/api/debug/rocks`.
 

@@ -2,27 +2,9 @@
 // Not the real game UI: it edits the position through the /api/debug endpoints.
 import { useCallback, useEffect, useState } from 'react'
 import './App.css'
+import Board3D from './Board3D.jsx'
+import { GLYPHS, LAYERS, PIECE_TYPES, RANGE, keyOf, layerLabel, parsePiece, sameCoord } from './shared.js'
 
-const LAYERS = [
-  { z: 2, name: 'Sky High' },
-  { z: 1, name: 'Sky' },
-  { z: 0, name: 'Surface' },
-  { z: -1, name: 'Dungeon' },
-  { z: -2, name: 'Abyss' },
-]
-const PIECE_TYPES = ['King', 'Queen', 'Rook', 'Bishop', 'Knight', 'Pawn']
-const GLYPHS = { King: '♚', Queen: '♛', Rook: '♜', Bishop: '♝', Knight: '♞', Pawn: '♟' }
-const RANGE = [0, 1, 2, 3, 4, 5, 6, 7]
-
-const keyOf = (coord) => `[${coord.join(', ')}]`
-const sameCoord = (a, b) => a && b && a[0] === b[0] && a[1] === b[1] && a[2] === b[2]
-
-// "Pawn(white)" → { type: "Pawn", color: "white" }, "Rock" → { type: "Rock" }
-function parsePiece(str) {
-  if (!str) return null
-  const match = str.match(/^(\w+)\((\w+)\)$/)
-  return match ? { type: match[1], color: match[2] } : { type: str }
-}
 
 async function api(path, body) {
   const options =
@@ -39,6 +21,8 @@ function App() {
   const [legalMoves, setLegalMoves] = useState([])
   const [tool, setTool] = useState('move') // 'move' | 'erase' | { type, color }
   const [freeTurns, setFreeTurns] = useState(true)
+  const [view, setView] = useState('3d') // '3d' | '2d'
+  const [activeLayer, setActiveLayer] = useState(0) // the plane drawn solid in 3D
   const [error, setError] = useState(null)
 
   const clearSelection = () => {
@@ -145,6 +129,31 @@ function App() {
         </div>
 
         <div className="group">
+          <span className="label">View</span>
+          {['3d', '2d'].map((mode) => (
+            <button key={mode} className={view === mode ? 'active' : ''} onClick={() => setView(mode)}>
+              {mode.toUpperCase()}
+            </button>
+          ))}
+          {view === '3d' && (
+            <>
+              <span className="label inline">Current plane</span>
+              {LAYERS.map(({ z, name }) => (
+                <button
+                  key={z}
+                  title={name}
+                  className={activeLayer === z ? 'active' : ''}
+                  onClick={() => setActiveLayer(z)}
+                >
+                  {layerLabel(z)}
+                </button>
+              ))}
+              <span className="note">Drag to rotate, right-drag to pan, scroll to zoom.</span>
+            </>
+          )}
+        </div>
+
+        <div className="group">
           <span className="label">Click does</span>
           <button className={tool === 'move' ? 'active' : ''} onClick={() => setTool('move')}>
             Select / move
@@ -217,11 +226,21 @@ function App() {
         {error && <div className="error">{error}</div>}
       </section>
 
-      <section className="layers">
+      {view === '3d' && (
+        <Board3D
+          board={board}
+          selected={selected}
+          legalMoves={legalMoves}
+          activeLayer={activeLayer}
+          onSquareClick={onSquareClick}
+        />
+      )}
+
+      <section className="layers" hidden={view !== '2d'}>
         {LAYERS.map(({ z, name }) => (
           <div className="layer" key={z}>
             <h2>
-              z = {z > 0 ? `+${z}` : z} <span>{name}</span>
+              {layerLabel(z)} <span>{name}</span>
             </h2>
             <div className="grid">
               {[...RANGE].reverse().map((y) => (

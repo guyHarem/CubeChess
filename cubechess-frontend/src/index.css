@@ -7,6 +7,7 @@
   --accent: #2f6fed;
   --error: #a4161a;
   --error-bg: #fde8e8;
+  --scene: #e9ecf2;
 
   font: 14px/1.4 system-ui, -apple-system, 'Segoe UI', sans-serif;
   color: var(--text);
@@ -23,6 +24,7 @@
     --accent: #6b9bff;
     --error: #ffb4b4;
     --error-bg: #4a1d1f;
+    --scene: #10131a;
   }
 }
 
