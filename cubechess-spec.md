@@ -55,9 +55,9 @@ To prevent cognitive overload and maintain strategic playability, **no piece can
 
 ### The Pawn
 *   **Standard Move:** Moves 1 step forward on its current plane `(y + 1)` OR climbs/descends 1 layer forward `(y + 1, z ± 1)`.
-*   **Double-Move:** From its starting rank, a Pawn can advance 2 squares forward on its plane, OR it can advance 2 squares forward while changing 1 or 2 layers (following its allowed forward movement angles).
-*   **Capture:** Captures diagonally forward on its current plane `(x ± 1, y + 1)` OR vertically forward across layers `(y + 1, z ± 1)`. It cannot do both at once.
-*   **En Passant:** Allowed on both planar double-moves and vertical-diagonal double-moves.
+*   **Double-Move:** From its starting rank, a Pawn can advance 2 squares forward on its plane, OR it can advance 2 squares forward while climbing/descending exactly 2 layers `(y + 2, z ± 2)`. The square it passes over must be empty.
+*   **Capture:** Captures diagonally forward on its current plane `(x ± 1, y + 1)` OR diagonally forward while changing one layer `(x ± 1, y + 1, z ± 1)`. This is the only exception to the Two-Axis rule. A straight-ahead climb `(y + 1, z ± 1)` is a move, never a capture.
+*   **En Passant:** Allowed on both planar double-moves and vertical-diagonal double-moves. The capturing pawn lands on the square the enemy pawn passed over.
 *   **Promotion:** A Pawn promotes to a Queen, Rook, Bishop, or Knight when it reaches the opponent's final rank (`y = 7` for White, `y = 0` for Black) on **any** of the 5 layers.
 
 ---
