@@ -23,7 +23,8 @@ A 3D chess variant on a 5-layer cube board. This is a **work in progress (WIP)**
 - ✅ Home page, game setup and the game screen (local two-player)
 - ✅ Three.js 3D board: cube-shaped cells, 3D pieces, layer tools, camera controls
 - ✅ Move list, captured material, chess clock with increment, undo, resign and draw by agreement
-- ⏳ Lessons, scenarios, computer opponent, online play
+- ✅ Lesson player: nine lessons on a 5×5 three-layer board (`cubechess-frontend/src/lessons.json`)
+- ⏳ Scenarios, computer opponent, online play
 - 🔧 Developer test bench at `#/bench` for checking backend behavior
 
 ### Phase 3: Polish & Deployment (Not Started)
@@ -75,8 +76,8 @@ npm run dev
 # App runs on http://localhost:5173
 ```
 
-Pages (hash routes): `#/` home, `#/setup` new game, `#/game` the board, `#/bench` the
-developer test bench. The frontend needs the backend running; Vite proxies `/api` to port 5001.
+Pages (hash routes): `#/` home, `#/setup` new game, `#/game` the board, `#/learn` lessons,
+`#/bench` the developer test bench. The frontend needs the backend running; Vite proxies `/api` to port 5001.
 
 The layers are named, top to bottom: Space, Sky, Ground, Dungeon, Abyss. Move notation is
 standard chess notation plus a layer mark for moves that land off the Ground:
@@ -111,6 +112,9 @@ occurred three times), `move_limit` (`move_limit` moves by each player, 50 by de
 no capture and no pawn move; `halfmove_clock` counts the single moves so far) or
 `insufficient_material`. Draws are reported automatically; the engine itself does not block
 further moves after one, so the UI decides when to stop the game.
+
+**Two games:** the server keeps a `main` game and a separate `practice` game used by the
+lessons. Every endpoint works on `main` unless the request adds `?game=practice`.
 
 **Clock:** `clock` is `null` for an untimed game, otherwise
 `{"initial", "increment", "white", "black", "running"}` in seconds. A player's clock runs only

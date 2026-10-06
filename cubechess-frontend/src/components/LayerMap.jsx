@@ -5,7 +5,7 @@ import PieceIcon from './PieceIcon.jsx'
 
 const FILES = 'abcdefgh'
 
-export default function LayerMap({ board, size, z, side, selected, legalMoves, showMoves, onCellClick }) {
+export default function LayerMap({ board, size, z, side, selected, legalMoves, goal, showMoves = true, onCellClick }) {
   const layer = layerOf(z)
   const range = [...Array(size).keys()]
   // White at the bottom when white sits nearest, otherwise the view is turned round
@@ -22,12 +22,13 @@ export default function LayerMap({ board, size, z, side, selected, legalMoves, s
           const classes = ['map-cell']
           if (sameCoord(selected, coord)) classes.push('is-selected')
           if (legal && piece) classes.push('is-capture')
+          if (sameCoord(goal, coord)) classes.push('is-goal')
           return (
             <button
               key={`${x}-${y}`}
               type="button"
               className={classes.join(' ')}
-              style={{ background: (x + y) % 2 === 0 ? layer.dark : layer.light }}
+              style={{ backgroundColor: (x + y) % 2 === 0 ? layer.dark : layer.light }}
               aria-label={`${FILES[x]}${y + 1} on ${layer.name}${piece ? `, ${piece.color ?? ''} ${piece.type}` : ''}`}
               onClick={() => onCellClick(coord)}
             >

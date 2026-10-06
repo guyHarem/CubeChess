@@ -1,0 +1,215 @@
+{
+  "board": { "size": 5, "z_min": -1, "z_max": 1 },
+  "lessons": [
+    {
+      "id": "cube",
+      "title": "The cube and its layers",
+      "text": "CubeChess is played inside a block of cells. This practice board has three layers: Sky on top, Ground in the middle, Dungeon below. Click a piece to see where it can go, then click one of the balls to move it.",
+      "steps": [
+        {
+          "task": "Move the rook to the glowing cell at the far end of the Ground.",
+          "layer": 0,
+          "pieces": [{ "coord": [0, 0, 0], "type": "Rook", "color": "white" }],
+          "from": [0, 0, 0],
+          "to": [0, 4, 0],
+          "expect": "move",
+          "done": "That is all a move takes: pick a piece, pick a cell."
+        }
+      ]
+    },
+    {
+      "id": "rook",
+      "title": "The rook rides the elevator",
+      "text": "A rook moves any distance along one straight line: across a rank, along a file, or straight up and down through the layers. It cannot jump over anything in its way.",
+      "steps": [
+        {
+          "task": "Take the rook straight up into the Sky.",
+          "layer": 0,
+          "pieces": [{ "coord": [2, 2, 0], "type": "Rook", "color": "white" }],
+          "from": [2, 2, 0],
+          "to": [2, 2, 1],
+          "expect": "move",
+          "done": "Same square, one layer higher. That is the elevator."
+        },
+        {
+          "task": "The rook is in the Dungeon. Capture the pawn two layers above it.",
+          "layer": -1,
+          "pieces": [
+            { "coord": [1, 1, -1], "type": "Rook", "color": "white" },
+            { "coord": [1, 1, 1], "type": "Pawn", "color": "black" }
+          ],
+          "from": [1, 1, -1],
+          "to": [1, 1, 1],
+          "expect": "capture",
+          "done": "A rook can ride through several layers in one move, as long as the cells between are empty."
+        }
+      ]
+    },
+    {
+      "id": "bishop",
+      "title": "The bishop and its diagonals",
+      "text": "A bishop moves diagonally. On one layer that is the diagonal you already know. It can also climb or dive diagonally: one cell sideways or forward for every layer it changes.",
+      "steps": [
+        {
+          "task": "Climb from the Dungeon to the Sky in a single move.",
+          "layer": -1,
+          "pieces": [{ "coord": [2, 0, -1], "type": "Bishop", "color": "white" }],
+          "from": [2, 0, -1],
+          "to": [4, 0, 1],
+          "expect": "move",
+          "done": "Two cells sideways, two layers up: a diagonal through the cube."
+        },
+        {
+          "task": "Now a diagonal on one layer. Capture the knight.",
+          "layer": 0,
+          "pieces": [
+            { "coord": [0, 0, 0], "type": "Bishop", "color": "white" },
+            { "coord": [3, 3, 0], "type": "Knight", "color": "black" }
+          ],
+          "from": [0, 0, 0],
+          "to": [3, 3, 0],
+          "expect": "capture",
+          "done": "On a single layer the bishop is exactly the piece you know."
+        }
+      ]
+    },
+    {
+      "id": "knight",
+      "title": "The knight jumps layers",
+      "text": "A knight moves two cells in one direction and one in another. In CubeChess one of those directions can be up or down, so it can land on the layer above or below. It is the only piece that jumps over pieces and rocks.",
+      "steps": [
+        {
+          "task": "Move the knight to the glowing cell on the Sky layer.",
+          "layer": 0,
+          "pieces": [{ "coord": [2, 2, 0], "type": "Knight", "color": "white" }],
+          "from": [2, 2, 0],
+          "to": [2, 4, 1],
+          "expect": "move",
+          "done": "Two cells forward and one layer up."
+        },
+        {
+          "task": "Capture the rook down in the Dungeon.",
+          "layer": 0,
+          "pieces": [
+            { "coord": [2, 2, 0], "type": "Knight", "color": "white" },
+            { "coord": [4, 2, -1], "type": "Rook", "color": "black" }
+          ],
+          "from": [2, 2, 0],
+          "to": [4, 2, -1],
+          "expect": "capture",
+          "done": "Two cells sideways and one layer down."
+        }
+      ]
+    },
+    {
+      "id": "queen",
+      "title": "The queen",
+      "text": "The queen moves like a rook and a bishop combined, on a layer or between layers. Like every piece, she never moves along all three directions at once.",
+      "steps": [
+        {
+          "task": "From the Dungeon, capture the bishop in the Sky.",
+          "layer": -1,
+          "pieces": [
+            { "coord": [0, 0, -1], "type": "Queen", "color": "white" },
+            { "coord": [2, 0, 1], "type": "Bishop", "color": "black" }
+          ],
+          "from": [0, 0, -1],
+          "to": [2, 0, 1],
+          "expect": "capture",
+          "done": "That was a bishop move through the layers. She could also have ridden straight up like a rook."
+        }
+      ]
+    },
+    {
+      "id": "king",
+      "title": "The king steps up and down",
+      "text": "The king moves one cell in any direction on its layer, or one cell straight up or down. It never moves diagonally between layers. Being able to change layer makes it harder to trap than in normal chess.",
+      "steps": [
+        {
+          "task": "The rook is giving check along the rank. Escape by stepping up into the Sky.",
+          "layer": 0,
+          "pieces": [
+            { "coord": [2, 2, 0], "type": "King", "color": "white" },
+            { "coord": [0, 2, 0], "type": "Rook", "color": "black" }
+          ],
+          "from": [2, 2, 0],
+          "to": [2, 2, 1],
+          "expect": "move",
+          "done": "The rook attacks along the Ground. One layer up, the king is out of its line."
+        }
+      ]
+    },
+    {
+      "id": "pawn",
+      "title": "Pawns climb and capture",
+      "text": "A pawn moves one cell forward. As it goes it may stay on its layer, climb one layer, or drop one. From its starting rank it may go two cells. It captures one cell diagonally forward, on its own layer or one layer up or down.",
+      "steps": [
+        {
+          "task": "Advance the pawn one cell and climb into the Sky as you go.",
+          "layer": 0,
+          "pieces": [{ "coord": [2, 1, 0], "type": "Pawn", "color": "white" }],
+          "from": [2, 1, 0],
+          "to": [2, 2, 1],
+          "expect": "move",
+          "done": "Forward and up in one move. Straight ahead it can never capture."
+        },
+        {
+          "task": "Capture the knight. It is diagonally ahead and one layer up.",
+          "layer": 0,
+          "pieces": [
+            { "coord": [2, 1, 0], "type": "Pawn", "color": "white" },
+            { "coord": [3, 2, 1], "type": "Knight", "color": "black" }
+          ],
+          "from": [2, 1, 0],
+          "to": [3, 2, 1],
+          "expect": "capture",
+          "done": "A pawn capture is the one move in the game that changes all three directions at once."
+        }
+      ]
+    },
+    {
+      "id": "rocks",
+      "title": "Rocks in the dungeon",
+      "text": "Rocks never move and can never be captured. They block rooks, bishops and queens. A knight jumps straight over them.",
+      "steps": [
+        {
+          "task": "The knight is walled in by rocks. Jump out and capture the bishop.",
+          "layer": -1,
+          "pieces": [
+            { "coord": [0, 0, -1], "type": "Knight", "color": "white" },
+            { "coord": [1, 0, -1], "type": "Rock" },
+            { "coord": [0, 1, -1], "type": "Rock" },
+            { "coord": [1, 1, -1], "type": "Rock" },
+            { "coord": [1, 2, -1], "type": "Bishop", "color": "black" }
+          ],
+          "from": [0, 0, -1],
+          "to": [1, 2, -1],
+          "expect": "capture",
+          "done": "No other piece could have left that corner."
+        }
+      ]
+    },
+    {
+      "id": "mate",
+      "title": "Check and checkmate",
+      "text": "Check means a king is attacked and its owner must deal with it at once. Checkmate means there is no way out, and the game is over. Remember the king can also flee up or down, so every one of those cells has to be covered too.",
+      "steps": [
+        {
+          "task": "White to move. Find the queen move that is checkmate.",
+          "layer": -1,
+          "hideGoal": true,
+          "pieces": [
+            { "coord": [0, 0, -1], "type": "King", "color": "black" },
+            { "coord": [2, 2, -1], "type": "King", "color": "white" },
+            { "coord": [0, 3, 0], "type": "Rook", "color": "white" },
+            { "coord": [1, 4, -1], "type": "Queen", "color": "white" }
+          ],
+          "from": [1, 4, -1],
+          "to": [1, 1, -1],
+          "expect": "checkmate",
+          "done": "The queen covers the Dungeon cells, your king protects her, and the rook guards the cell above the black king."
+        }
+      ]
+    }
+  ]
+}

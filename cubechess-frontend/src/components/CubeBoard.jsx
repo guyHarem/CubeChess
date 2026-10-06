@@ -170,6 +170,22 @@ function Ring({ position, color }) {
   )
 }
 
+// The cell a lesson asks you to reach: a glowing amber pad on its floor
+function GoalPad({ position }) {
+  return (
+    <group position={[position[0], position[1] + 0.02, position[2]]} rotation={FLAT}>
+      <mesh>
+        <circleGeometry args={[0.42, 48]} />
+        <meshBasicMaterial color="#F5B83D" transparent opacity={0.4} depthWrite={false} toneMapped={false} />
+      </mesh>
+      <mesh>
+        <torusGeometry args={[0.44, 0.045, 10, 48]} />
+        <meshBasicMaterial color="#F5B83D" toneMapped={false} />
+      </mesh>
+    </group>
+  )
+}
+
 const BUILDERS = {}
 function pieceBuilder(type, color) {
   const key = `${type}-${color}`
@@ -249,6 +265,7 @@ function Scene({
   activeLayer,
   selected,
   legalMoves,
+  goal,
   showMoveBalls,
   spread,
   solo,
@@ -323,6 +340,7 @@ function Scene({
         ),
       )}
 
+      {goal && visible(goal[2]) && <GoalPad position={cellPosition(goal)} />}
       {selected && visible(selected[2]) && <Ring position={cellPosition(selected)} color="#F5B83D" />}
       {moves.map((move) =>
         board[keyOf(move)] ? (
@@ -350,6 +368,7 @@ export default function CubeBoard({
   activeLayer = 0,
   selected = null,
   legalMoves = [],
+  goal = null,
   showMoveBalls = true,
   spread = false,
   solo = false,
@@ -372,6 +391,7 @@ export default function CubeBoard({
         activeLayer={activeLayer}
         selected={selected}
         legalMoves={legalMoves}
+        goal={goal}
         showMoveBalls={showMoveBalls}
         spread={spread}
         solo={solo}

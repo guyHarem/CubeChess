@@ -310,5 +310,30 @@ class TestSmallBoardApi(unittest.TestCase):
             self.assertEqual(self.client.post('/api/debug/setup', json=body).status_code, 400, body)
 
 
+class TestPracticeGame(unittest.TestCase):
+    def setUp(self):
+        self.client = app.test_client()
+        self.client.post('/api/game/new')
+
+    def test_practice_game_is_separate_from_the_main_game(self):
+        self.client.post('/api/game/move', json={"from": [4, 1, 0], "to": [4, 3, 0]})
+        data = self.client.post('/api/debug/setup?game=practice', json={"size": 5, "z_min": -1, "z_max": 1, "pieces": [
+            {"coord": [2, 2, 0], "type": "Knight", "color": "white"}]}).get_json()
+        self.assertEqual(data["board_size"]["size"], 5)
+        moves = self.client.get('/api/game/legal-moves', query_string={"from": "[2,2,0]", "game": "practice"}).get_json()
+        self.assertEqual(len(moves["legal_moves"]), 16)
+        self.client.post('/api/game/move?game=practice', json={"from": [2, 2, 0], "to": [2, 4, 1]})
+
+        main = self.client.get('/api/game/state').get_json()
+        self.assertEqual(main["board_size"]["size"], 8)
+        self.assertEqual(len(main["move_history"]), 1)
+        self.assertEqual(main["board"]["[4, 3, 0]"], "Pawn(white)")
+        practice = self.client.get('/api/game/state?game=practice').get_json()
+        self.assertEqual(practice["board"], {"[2, 4, 1]": "Knight(white)"})
+
+    def test_unknown_game_is_rejected(self):
+        self.assertEqual(self.client.get('/api/game/state?game=other').status_code, 400)
+
+
 if __name__ == '__main__':
     unittest.main()

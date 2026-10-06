@@ -5,7 +5,8 @@ import { keyOf, parsePiece, sameCoord } from './chess.js'
 
 const OFFLINE = 'Cannot reach the game server. Start it with: python api/app.py'
 
-export function useGame() {
+// which: 'main' for the real game, 'practice' for the lesson board
+export function useGame(which = 'main') {
   const [game, setGame] = useState(null)
   const [selected, setSelected] = useState(null)
   const [legalMoves, setLegalMoves] = useState([])
@@ -19,7 +20,7 @@ export function useGame() {
   // Every state-changing endpoint answers with the whole game
   const call = useCallback(async (path, body) => {
     try {
-      const data = await api(path, body)
+      const data = await api(path, body, which)
       if (data.board) setGame({ ...data, receivedAt: performance.now() })
       setError(data.success ? null : data.error)
       setSelected(null)
@@ -29,36 +30,36 @@ export function useGame() {
       setError(OFFLINE)
       return null
     }
-  }, [])
+  }, [which])
 
   useEffect(() => {
-    api('/game/state')
+    api('/game/state', undefined, which)
       .then((data) => {
         setGame({ ...data, receivedAt: performance.now() })
         setError(null)
       })
       .catch(() => setError(OFFLINE))
-  }, [])
+  }, [which])
 
   // Re-read the game without touching the selection (used when a clock runs out)
   const refresh = useCallback(async () => {
     try {
-      const data = await api('/game/state')
+      const data = await api('/game/state', undefined, which)
       setGame({ ...data, receivedAt: performance.now() })
     } catch {
       setError(OFFLINE)
     }
-  }, [])
+  }, [which])
 
   const select = useCallback(async (coord) => {
     try {
-      const data = await legalMovesOf(coord)
+      const data = await legalMovesOf(coord, which)
       setSelected(coord)
       setLegalMoves(data.legal_moves ?? [])
     } catch {
       setError(OFFLINE)
     }
-  }, [])
+  }, [which])
 
   // One click on a cell: play the move if it is legal, otherwise pick up or put down a piece
   const clickCell = useCallback(
@@ -82,7 +83,9 @@ export function useGame() {
     error,
     clickCell,
     clearSelection,
+    select,
     refresh,
+    setup: (position) => call('/debug/setup', position),
     resign: (color) => call('/game/resign', { color }),
     agreeDraw: () => call('/game/draw', {}),
     newGame: (options) => call('/game/new', options ?? {}),

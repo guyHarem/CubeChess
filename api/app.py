@@ -10,7 +10,7 @@ import sys
 # Make the project root importable so `python api/app.py` works from any directory
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, g
 from flask_cors import CORS
 from api.game_manager import GameManager
 from api.utils import convert_response
@@ -19,8 +19,21 @@ from engine.pieces import Queen, Rook, Bishop, Knight
 app = Flask(__name__)
 CORS(app)
 
-# Global game instance (shared across all requests)
+# Two independent games live on the server:
+#   "main"     - the game being played
+#   "practice" - a scratch board for lessons, so opening a lesson never disturbs the real game
+# Every endpoint works on "main" unless the request says ?game=practice
 game_manager = GameManager()
+practice_manager = GameManager()
+MANAGERS = {"main": game_manager, "practice": practice_manager}
+
+
+@app.before_request
+def choose_game():
+    which = request.args.get("game", "main")
+    if which not in MANAGERS:
+        return jsonify({"success": False, "error": f"Unknown game: {which}"}), 400
+    g.manager = MANAGERS[which]
 
 
 def parse_coord(value):
@@ -38,7 +51,7 @@ def new_game():
     """Start a new game. Optional body:
     {"rocks": true, "move_limit": 50, "clock": {"initial": 600, "increment": 5}} (clock in seconds, omit for none)"""
     data = request.get_json(silent=True) or {}
-    response = game_manager.new_game(rocks=bool(data.get("rocks", True)), move_limit=data.get("move_limit", 50),
+    response = g.manager.new_game(rocks=bool(data.get("rocks", True)), move_limit=data.get("move_limit", 50),
                                      clock=data.get("clock"))
     status_code = 200 if response.get("success") else 400
     return jsonify(convert_response(response)), status_code
@@ -49,7 +62,7 @@ def new_game():
 @app.route('/api/game/state', methods=['GET'])
 def get_state():
     """Get current game state (board, player, status)"""
-    response = game_manager.get_state()
+    response = g.manager.get_state()
     return jsonify(convert_response(response))
 
 
@@ -66,7 +79,7 @@ def get_legal_moves():
         # Parse JSON array string to list, then to tuple: "[0,1,0]" → (0,1,0)
         from_coord = parse_coord(json.loads(from_str))
         
-        response = game_manager.get_legal_moves(from_coord)
+        response = g.manager.get_legal_moves(from_coord)
         status_code = 200 if response.get("success") else 400
         return jsonify(convert_response(response)), status_code
     except ValueError:
@@ -88,7 +101,7 @@ def make_move():
         from_coord = parse_coord(data['from'])
         to_coord = parse_coord(data['to'])
         
-        response = game_manager.make_move(from_coord, to_coord)
+        response = g.manager.make_move(from_coord, to_coord)
         
         # Return 400 if move failed, 200 if succeeded
         status_code = 200 if response.get("success") else 400
@@ -125,9 +138,9 @@ def promote_pawn():
         # Get piece class and create instance with current player's color
         PieceClass = piece_classes[piece_type_str]
         # The turn only passes once the promotion is done, so it's the current player's piece
-        new_piece = PieceClass(game_manager.game.current_player)
+        new_piece = PieceClass(g.manager.game.current_player)
         
-        response = game_manager.promote_pawn(coord, new_piece)
+        response = g.manager.promote_pawn(coord, new_piece)
         
         status_code = 200 if response.get("success") else 400
         return jsonify(convert_response(response)), status_code
@@ -141,7 +154,7 @@ def promote_pawn():
 def resign():
     """Resign. Optional body: {"color": "white"}; without it the player to move resigns"""
     data = request.get_json(silent=True) or {}
-    response = game_manager.resign(data.get("color"))
+    response = g.manager.resign(data.get("color"))
     status_code = 200 if response.get("success") else 400
     return jsonify(convert_response(response)), status_code
 
@@ -149,7 +162,7 @@ def resign():
 @app.route('/api/game/draw', methods=['POST'])
 def agree_draw():
     """Both players agreed to a draw"""
-    response = game_manager.agree_draw()
+    response = g.manager.agree_draw()
     status_code = 200 if response.get("success") else 400
     return jsonify(convert_response(response)), status_code
 
@@ -159,7 +172,7 @@ def agree_draw():
 @app.route('/api/game/undo', methods=['POST'])
 def undo_move():
     """Undo the last move"""
-    response = game_manager.undo_move()
+    response = g.manager.undo_move()
     
     status_code = 200 if response.get("success") else 400
     return jsonify(convert_response(response)), status_code
@@ -184,7 +197,7 @@ def debug_setup():
     except (TypeError, KeyError, ValueError, AttributeError):
         return jsonify({"success": False, "error": "Invalid pieces list"}), 400
     
-    return sandbox_response(game_manager.setup_position(
+    return sandbox_response(g.manager.setup_position(
         pieces, data.get("current_player", "white"), bool(data.get("rocks", True)),
         size=data.get("size", 8), z_min=data.get("z_min", -2), z_max=data.get("z_max", 2)))
 
@@ -198,7 +211,7 @@ def debug_place():
     except ValueError:
         return jsonify({"success": False, "error": "Invalid coordinate format"}), 400
     
-    return sandbox_response(game_manager.place_piece(coord, data.get("type"), data.get("color")))
+    return sandbox_response(g.manager.place_piece(coord, data.get("type"), data.get("color")))
 
 
 @app.route('/api/debug/remove', methods=['POST'])
@@ -210,21 +223,21 @@ def debug_remove():
     except ValueError:
         return jsonify({"success": False, "error": "Invalid coordinate format"}), 400
     
-    return sandbox_response(game_manager.remove_piece(coord))
+    return sandbox_response(g.manager.remove_piece(coord))
 
 
 @app.route('/api/debug/turn', methods=['POST'])
 def debug_turn():
     """Choose who moves next: {"player"}"""
     data = request.get_json(silent=True) or {}
-    return sandbox_response(game_manager.set_turn(data.get("player")))
+    return sandbox_response(g.manager.set_turn(data.get("player")))
 
 
 @app.route('/api/debug/rocks', methods=['POST'])
 def debug_rocks():
     """Add or remove the dungeon rocks: {"enabled"}"""
     data = request.get_json(silent=True) or {}
-    return sandbox_response(game_manager.set_rocks(bool(data.get("enabled"))))
+    return sandbox_response(g.manager.set_rocks(bool(data.get("enabled"))))
 
 
 # ==================== SERVER ====================

@@ -26,10 +26,11 @@ export default function Home() {
                 layers={SMALL_BOARD.layers}
                 selected={[2, 2, 0]}
                 legalMoves={LESSON_MOVES}
+                goal={[2, 4, 1]}
               />
             </div>
             <h2>Learn How to Play</h2>
-            <p>Short lessons on a small board. Try every move yourself.</p>
+            <p>Nine short lessons on a small board. Try every move yourself.</p>
             <span className="button">Start learning</span>
           </a>
 
