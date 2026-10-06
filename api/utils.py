@@ -67,10 +67,6 @@ def convert_response(response_dict):
     Convert entire GameManager response to JSON-ready format.
     Handles board, legal_moves, move_history, and other coordinate-related fields.
     """
-    if not response_dict.get("success"):
-        # Error response - no conversion needed, just return as-is
-        return response_dict
-
     # Make a copy to avoid modifying original
     json_response = response_dict.copy()
 

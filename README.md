@@ -26,7 +26,7 @@ A 3D chess variant on a 5-layer cube board. This is a **work in progress (WIP)**
 - ⏳ Game state display
 
 ### Phase 3: Polish & Deployment (Not Started)
-- ⏳ Testing suite
+- 🔄 Testing suite (engine + API covered in `tests/`)
 - ⏳ Deployment
 
 ---
@@ -57,10 +57,13 @@ source venv/bin/activate
 # Install dependencies
 pip install -r requirements.txt
 
-# Run Flask server
-cd api
-python app.py
-# Server runs on http://localhost:5000
+# Run Flask server (from the project root)
+python api/app.py
+# Server runs on http://localhost:5001 (set PORT to change it;
+# macOS reserves 5000 for AirPlay Receiver)
+
+# Run the tests
+python -m unittest discover -s tests
 ```
 
 ### Frontend
@@ -83,6 +86,16 @@ npm run dev
 | `/api/game/legal-moves` | GET | Get legal moves for piece |
 | `/api/game/promote` | POST | Promote pawn |
 | `/api/game/undo` | POST | Undo last move |
+
+Coordinates are `[x, y, z]` lists. Every game-state response carries `current_player`,
+`board` (`{"[4, 0, 0]": "King(white)", ...}`), `status` (`ongoing`, `check`, `checkmate`,
+`stalemate`, `draw`), `pending_promotion` and `move_history`. Failed requests return
+HTTP 400 with `success: false` and an `error` message.
+
+**Promotion:** when a pawn reaches the last rank, `pending_promotion` holds its coordinate
+and the turn does not pass until `/api/game/promote` is called with
+`{"coord": [x, y, z], "piece_type": "Queen" | "Rook" | "Bishop" | "Knight"}`.
+Undoing a promotion takes back the pawn move as well.
 
 ---
 

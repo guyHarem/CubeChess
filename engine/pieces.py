@@ -1,4 +1,3 @@
-from engine.board import Board
 X, Y, Z = 0 ,1 ,2
 
 class Rock:
@@ -174,13 +173,16 @@ class Pawn(Piece):
         all_pawn_moves = []
         all_pawn_captures = []
         
+        # White pawns advance toward Y=7, black pawns toward Y=0
+        d = 1 if self.color == "white" else -1
+        
         # Normal movement vectors
-        move_vectors = [(0,1,0), (0,1,1), (0,1,-1)]
+        move_vectors = [(0,d,0), (0,d,1), (0,d,-1)]
         if not self.has_moved:
-            move_vectors += [(0,2,0), (0,2,2), (0,2,-2)]
+            move_vectors += [(0,2*d,0), (0,2*d,2), (0,2*d,-2)]
         
         # Capture vectors
-        capture_vectors = [(1,1,0), (-1,1,0), (1,1,1), (-1,1,1), (1,1,-1), (-1,1,-1)]
+        capture_vectors = [(1,d,0), (-1,d,0), (1,d,1), (-1,d,1), (1,d,-1), (-1,d,-1)]
         
         for vector in move_vectors:
             new_coord = Piece.coord_sum(self_coord, vector)
@@ -193,10 +195,3 @@ class Pawn(Piece):
                 all_pawn_captures.append(new_coord)
         
         return all_pawn_moves, all_pawn_captures
-
-
-
-
-
-
-
