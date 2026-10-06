@@ -5,7 +5,7 @@
   padding: 16px;
 }
 
-header {
+.bench header {
   display: flex;
   align-items: baseline;
   gap: 12px;
@@ -13,19 +13,19 @@ header {
   margin-bottom: 12px;
 }
 
-h1 {
+.bench h1 {
   font-size: 20px;
   margin: 0;
 }
 
-.note {
+.bench .note {
   color: var(--muted);
   margin: 0;
 }
 
 /* ---------- controls ---------- */
 
-.panel {
+.bench .panel {
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -35,14 +35,14 @@ h1 {
   background: var(--surface);
 }
 
-.group {
+.bench .group {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 6px;
 }
 
-.label {
+.bench .label {
   width: 76px;
   font-size: 12px;
   font-weight: 600;
@@ -51,13 +51,13 @@ h1 {
   color: var(--muted);
 }
 
-.promo .label {
+.bench .promo .label {
   width: auto;
   margin-right: 6px;
   color: var(--accent);
 }
 
-.panel button {
+.bench .panel button {
   font: inherit;
   padding: 4px 10px;
   border: 1px solid var(--border);
@@ -67,40 +67,40 @@ h1 {
   cursor: pointer;
 }
 
-.panel button:hover {
+.bench .panel button:hover {
   border-color: var(--accent);
 }
 
-.panel button.active {
+.bench .panel button.active {
   border-color: var(--accent);
   box-shadow: inset 0 0 0 1px var(--accent);
 }
 
-.panel label {
+.bench .panel label {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   margin-left: 6px;
 }
 
-.palette {
+.bench .palette {
   display: inline-flex;
   gap: 2px;
   margin-left: 8px;
 }
 
-.panel .palette button {
+.bench .panel .palette button {
   padding: 0 5px;
   font-size: 22px;
   line-height: 30px;
   background: #b9bec9;
 }
 
-.status {
+.bench .status {
   margin-left: 14px;
 }
 
-.error {
+.bench .error {
   padding: 6px 10px;
   border-radius: 6px;
   background: var(--error-bg);
@@ -109,29 +109,29 @@ h1 {
 
 /* ---------- boards ---------- */
 
-.layers {
+.bench .layers {
   display: flex;
   flex-wrap: wrap;
   gap: 14px;
   margin-top: 16px;
 }
 
-.layer h2 {
+.bench .layer h2 {
   margin: 0 0 4px calc(var(--cell) / 2);
   font-size: 14px;
   font-variant-numeric: tabular-nums;
 }
 
-.layer h2 span {
+.bench .layer h2 span {
   font-weight: 400;
   color: var(--muted);
 }
 
-.row {
+.bench .row {
   display: flex;
 }
 
-.axis {
+.bench .axis {
   width: var(--cell);
   height: calc(var(--cell) / 2);
   font-size: 11px;
@@ -140,17 +140,17 @@ h1 {
   color: var(--muted);
 }
 
-.row > .axis:first-child {
+.bench .row > .axis:first-child {
   width: calc(var(--cell) / 2);
   height: var(--cell);
   line-height: var(--cell);
 }
 
-.row:last-child > .axis:first-child {
+.bench .row:last-child > .axis:first-child {
   height: calc(var(--cell) / 2);
 }
 
-.square {
+.bench .square {
   position: relative;
   width: var(--cell);
   height: var(--cell);
@@ -162,24 +162,24 @@ h1 {
   place-items: center;
 }
 
-.square.light {
+.bench .square.light {
   background: #d9dde6;
 }
 
-.square.dark {
+.bench .square.dark {
   background: #8f9aae;
 }
 
-.square:hover {
+.bench .square:hover {
   filter: brightness(1.08);
 }
 
-.square.selected {
+.bench .square.selected {
   box-shadow: inset 0 0 0 3px #f2c200;
 }
 
 /* legal move onto an empty square */
-.square.move::after {
+.bench .square.move::after {
   content: '';
   width: 34%;
   height: 34%;
@@ -189,27 +189,27 @@ h1 {
 }
 
 /* legal move that captures */
-.square.capture {
+.bench .square.capture {
   box-shadow: inset 0 0 0 4px #e02424;
 }
 
-.glyph {
+.bench .glyph {
   font-size: calc(var(--cell) * 0.78);
   line-height: 1;
   font-family: 'Apple Symbols', 'Segoe UI Symbol', 'Noto Sans Symbols 2', 'DejaVu Sans', sans-serif;
 }
 
-.glyph.white {
+.bench .glyph.white {
   color: #fff;
   -webkit-text-stroke: 1px #1c2230;
 }
 
-.glyph.black {
+.bench .glyph.black {
   color: #11141b;
   -webkit-text-stroke: 1px #e8ebf2;
 }
 
-.rock {
+.bench .rock {
   width: 76%;
   height: 76%;
   border-radius: 28% 36% 30% 40%;
@@ -219,15 +219,15 @@ h1 {
 
 /* ---------- history ---------- */
 
-.history {
+.bench .history {
   margin-top: 16px;
 }
 
-.history .label {
+.bench .history .label {
   display: inline;
 }
 
-.history ol {
+.bench .history ol {
   margin: 6px 0 0;
   padding-left: 28px;
   font-family: ui-monospace, 'SF Mono', Menlo, monospace;
@@ -236,7 +236,7 @@ h1 {
 
 /* ---------- 3D view ---------- */
 
-.scene {
+.bench .scene {
   height: 72vh;
   min-height: 420px;
   margin-top: 16px;
@@ -246,15 +246,15 @@ h1 {
   overflow: hidden;
 }
 
-.label.inline {
+.bench .label.inline {
   width: auto;
   margin-left: 14px;
 }
 
-.group .note {
+.bench .group .note {
   margin-left: 10px;
 }
 
-.layers[hidden] {
+.bench .layers[hidden] {
   display: none;
 }

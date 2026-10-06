@@ -33,6 +33,24 @@ class TestApi(unittest.TestCase):
         data = self.client.post('/api/game/undo').get_json()
         self.assertEqual((data["status"], data["draw_reason"]), ("ongoing", None))
 
+    def test_new_game_options(self):
+        data = self.client.post('/api/game/new', json={"rocks": False, "move_limit": 30}).get_json()
+        self.assertEqual(len(data["board"]), 32)
+        self.assertEqual(data["move_limit"], 30)
+        self.assertEqual(self.client.post('/api/game/new', json={"move_limit": 0}).status_code, 400)
+        self.assertEqual(self.client.post('/api/game/new', json={"move_limit": "x"}).status_code, 400)
+        data = self.client.post('/api/game/new').get_json()
+        self.assertEqual((len(data["board"]), data["move_limit"]), (48, 50))
+
+    def test_history_marks_check(self):
+        # 1. f3 e5 2. g4 Qh4: mate in 2D chess, but here the king can step up a layer, so only check
+        for from_coord, to_coord in [([5, 1, 0], [5, 2, 0]), ([4, 6, 0], [4, 4, 0]),
+                                     ([6, 1, 0], [6, 3, 0]), ([3, 7, 0], [7, 3, 0])]:
+            data = self.move(from_coord, to_coord).get_json()
+        self.assertEqual(data["status"], "check")
+        self.assertEqual(data["move_history"][-1]["check"], "check")
+        self.assertIsNone(data["move_history"][-2]["check"])
+
     def test_legal_moves(self):
         res = self.client.get('/api/game/legal-moves?from=[4,1,0]')
         self.assertEqual(res.status_code, 200)

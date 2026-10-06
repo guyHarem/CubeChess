@@ -1,33 +1,67 @@
 :root {
-  --bg: #f4f5f8;
-  --surface: #ffffff;
-  --text: #1c2230;
-  --muted: #667085;
-  --border: #d3d8e2;
-  --accent: #2f6fed;
-  --error: #a4161a;
-  --error-bg: #fde8e8;
-  --scene: #e9ecf2;
+  /* One dark theme for now */
+  --bg: #0e1117;
+  --panel: #131720;
+  --surface: #161a22;
+  --raised: #1d222c;
+  --line: #222935;
+  --border: #2a313d;
+  --border-strong: #3a4352;
+  --text: #eef1f6;
+  --soft: #c7ceda;
+  --muted: #9aa4b5;
+  --accent: #f5b83d;
+  --accent-ink: #1a1405;
+  --danger: #ff5a4f;
+  --move: #22c7a9;
 
-  font: 14px/1.4 system-ui, -apple-system, 'Segoe UI', sans-serif;
+  /* Shape rule: panels 16px, cards 14px, controls 10px, chips round */
+  --r-panel: 16px;
+  --r-card: 14px;
+  --r-control: 10px;
+
+  --font: 'Outfit Variable', 'Outfit', system-ui, sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  /* Names the test bench still uses */
+  --error: #ffb4b4;
+  --error-bg: #4a1d1f;
+  --scene: #10131a;
+
+  font: 15px/1.45 var(--font);
   color: var(--text);
   background: var(--bg);
+  color-scheme: dark;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #14171d;
-    --surface: #1c2028;
-    --text: #e6e9ef;
-    --muted: #98a2b3;
-    --border: #343b48;
-    --accent: #6b9bff;
-    --error: #ffb4b4;
-    --error-bg: #4a1d1f;
-    --scene: #10131a;
-  }
+* {
+  box-sizing: border-box;
 }
 
 body {
   margin: 0;
+  min-height: 100dvh;
+  background: var(--bg);
+}
+
+h1,
+h2,
+p {
+  margin: 0;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }

@@ -39,7 +39,7 @@
 Coordinates: (X, Y, Z)
 X: 0-7 (columns, left to right)
 Y: 0-7 (rows, white to black)
-Z: -2 to +2 (5 layers: Abyss, Dungeon, Surface, Sky, Sky High)
+Z: -2 to +2 (5 layers: Abyss, Dungeon, Ground, Sky, Space)
 
 White: pieces at Y=0, pawns at Y=1, Z=0
 Black: pieces at Y=7, pawns at Y=6, Z=0

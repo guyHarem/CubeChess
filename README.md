@@ -19,12 +19,11 @@ A 3D chess variant on a 5-layer cube board. This is a **work in progress (WIP)**
   - CORS enabled for frontend
 
 ### Phase 2: Frontend UI (WIP)
-- 🔄 React + Vite scaffolding (created)
-- 🔄 Temporary test bench (`cubechess-frontend/src/App.jsx`) for checking backend behavior
-- ⏳ 2D board visualization
-- ⏳ Three.js 3D rendering
-- ⏳ Move execution UI
-- ⏳ Game state display
+- ✅ Home page, game setup and the game screen (local two-player)
+- ✅ Three.js 3D board: cube-shaped cells, 3D pieces, layer tools, camera controls
+- ✅ Move list, material count, captured pieces, undo, resign and draw by agreement
+- ⏳ Lessons, scenarios, clocks, computer opponent, online play
+- 🔧 Developer test bench at `#/bench` for checking backend behavior
 
 ### Phase 3: Polish & Deployment (Not Started)
 - 🔄 Testing suite (engine + API covered in `tests/`)
@@ -37,9 +36,9 @@ A 3D chess variant on a 5-layer cube board. This is a **work in progress (WIP)**
 **5 Layers (Z-axis):**
 - Z=-2: Abyss (bottom)
 - Z=-1: Dungeon
-- Z=0: Surface (starting layer)
+- Z=0: Ground (starting layer)
 - Z=1: Sky
-- Z=2: Sky High (top)
+- Z=2: Space (top)
 
 **Board Dimensions:** 8×8 per layer (standard chess board per layer)
 
@@ -75,17 +74,14 @@ npm run dev
 # App runs on http://localhost:5173
 ```
 
-For now the frontend is a **temporary test bench**, not the game UI. It shows the 5 layers
-side by side, lets you place or erase any piece on any square, and highlights the legal
-moves the backend returns for the piece you click (green dot = move, red frame = capture).
-It needs the backend running; Vite proxies `/api` to port 5001.
+Pages (hash routes): `#/` home, `#/setup` new game, `#/game` the board, `#/bench` the
+developer test bench. The frontend needs the backend running; Vite proxies `/api` to port 5001.
 
-The default view is 3D (Three.js): the layers are stacked and semi-transparent, drag rotates,
-right-drag pans, scroll zooms. "Current plane" picks the layer drawn solid; its squares and
-pieces take click priority over other layers, and legal-move markers are always clickable.
-A 2D view with the layers side by side is one button away.
+The layers are named, top to bottom: Space, Sky, Ground, Dungeon, Abyss. Move notation is
+standard chess notation plus a layer mark for moves that land off the Ground:
+`↑1` Sky, `↑2` Space, `↓1` Dungeon, `↓2` Abyss (for example `Nb6↑1`).
 
-It edits the position through sandbox endpoints that are for testing only:
+The test bench edits positions through sandbox endpoints that are for testing only:
 `/api/debug/setup`, `/api/debug/place`, `/api/debug/remove`, `/api/debug/turn`, `/api/debug/rocks`.
 
 ---
@@ -94,7 +90,7 @@ It edits the position through sandbox endpoints that are for testing only:
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/api/game/new` | POST | Start new game |
+| `/api/game/new` | POST | Start new game. Optional body: `{"rocks": true, "move_limit": 50}` |
 | `/api/game/state` | GET | Get current board state |
 | `/api/game/move` | POST | Execute a move |
 | `/api/game/legal-moves` | GET | Get legal moves for piece |
@@ -132,12 +128,16 @@ CubeChess/
 │   ├── app.py            # HTTP routes
 │   ├── game_manager.py   # Business logic wrapper
 │   └── utils.py          # JSON serialization
-├── cubechess-frontend/    # React + Vite frontend
-│   └── src/
-│       ├── components/   # React components
-│       └── hooks/        # Custom hooks (API calls)
+├── cubechess-frontend/    # React + Vite + Three.js frontend
+│   ├── src/
+│   │   ├── pages/        # Home, Setup, Game
+│   │   ├── components/   # CubeBoard (3D), LayerMap, MoveList, PlayerCard...
+│   │   ├── lib/          # API calls, game hook, notation, settings
+│   │   ├── bench/        # Developer test bench
+│   │   └── pieces3d.js   # Procedural 3D piece models
+│   └── dev/              # Sprite renderer used for the design artboards
 ├── tests/                # Test suite
-└── IMPLEMENTATION_GUIDE.md # Detailed specs
+└── IMPLEMENTATION_GUIDE.md # Original planning notes
 ```
 
 ---

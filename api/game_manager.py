@@ -52,9 +52,28 @@ class GameManager:
 
     # ==================== GAME SETUP ====================
 
-    def new_game(self):
-        self.game = GameState()
-        return self._state_response()
+    def new_game(self, rocks=True, move_limit=50):
+        try:
+            if type(move_limit) is not int or not 1 <= move_limit <= 500:
+                raise ValueError("move_limit must be a whole number from 1 to 500")
+            game = GameState(move_limit=move_limit)
+            if not rocks:
+                board = game.get_board_state()
+                for coord, piece in list(board.board.items()):
+                    if isinstance(piece, Rock):
+                        board.remove_piece(coord)
+                game.reset_tracking()
+            self.game = game
+            return self._state_response()
+        except ValueError as e:
+            return self._error_response(e)
+
+    def _mark_check(self, response):
+        """Note on the last history entry whether that move gave check or checkmate (for move notation)"""
+        if self.game.move_history and self.game.pending_promotion is None:
+            status = response["status"]
+            self.game.move_history[-1]["check"] = status if status in ("check", "checkmate") else None
+        return response
 
     # ==================== QUERIES (READ-ONLY) ====================
 
@@ -90,14 +109,14 @@ class GameManager:
     def make_move(self, from_coord, to_coord):
         try:
             self.game.make_move(from_coord, to_coord)
-            return self._state_response()
+            return self._mark_check(self._state_response())
         except ValueError as e:
             return self._error_response(e)
 
     def promote_pawn(self, coord, new_piece):
         try:
             self.game.promote_pawn(coord, new_piece)
-            return self._state_response()
+            return self._mark_check(self._state_response())
         except ValueError as e:
             return self._error_response(e)
 

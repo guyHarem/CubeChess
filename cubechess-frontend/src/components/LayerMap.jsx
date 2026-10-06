@@ -1,0 +1,43 @@
+// The current layer flattened and seen from above, with 2D pieces. Clicking a square
+// does the same thing as clicking the cell on the 3D board.
+import { keyOf, layerOf, parsePiece, sameCoord } from '../lib/chess.js'
+import PieceIcon from './PieceIcon.jsx'
+
+const FILES = 'abcdefgh'
+
+export default function LayerMap({ board, size, z, side, selected, legalMoves, showMoves, onCellClick }) {
+  const layer = layerOf(z)
+  const range = [...Array(size).keys()]
+  // White at the bottom when white sits nearest, otherwise the view is turned round
+  const ranks = side === 'black' ? range : [...range].reverse()
+  const files = side === 'black' ? [...range].reverse() : range
+
+  return (
+    <div className="layer-map" style={{ gridTemplateColumns: `repeat(${size}, minmax(0, 1fr))` }}>
+      {ranks.map((y) =>
+        files.map((x) => {
+          const coord = [x, y, z]
+          const piece = parsePiece(board[keyOf(coord)])
+          const legal = legalMoves.some((move) => sameCoord(move, coord))
+          const classes = ['map-cell']
+          if (sameCoord(selected, coord)) classes.push('is-selected')
+          if (legal && piece) classes.push('is-capture')
+          return (
+            <button
+              key={`${x}-${y}`}
+              type="button"
+              className={classes.join(' ')}
+              style={{ background: (x + y) % 2 === 0 ? layer.dark : layer.light }}
+              aria-label={`${FILES[x]}${y + 1} on ${layer.name}${piece ? `, ${piece.color ?? ''} ${piece.type}` : ''}`}
+              onClick={() => onCellClick(coord)}
+            >
+              {piece?.type === 'Rock' && <span className="map-rock" />}
+              {piece && piece.type !== 'Rock' && <PieceIcon type={piece.type} color={piece.color} size={26} />}
+              {legal && !piece && showMoves && <span className="map-dot" />}
+            </button>
+          )
+        }),
+      )}
+    </div>
+  )
+}

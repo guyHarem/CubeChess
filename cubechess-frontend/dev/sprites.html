@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>CubeChess piece renders</title>
+    <style>
+      body { margin: 0; padding: 24px; background: #3a4150; color: #fff; font: 14px system-ui; }
+      canvas { display: block; margin-top: 12px; image-rendering: auto; background:
+        conic-gradient(#86cf7a 0 25%, #c4ebb9 0 50%, #86cf7a 0 75%, #c4ebb9 0) 0 0 / 64px 64px; }
+    </style>
+  </head>
+  <body>
+    <!-- Dev tool: renders every 3D piece from the board's camera angle into one sprite sheet -->
+    <div id="status">rendering…</div>
+    <script type="module" src="./sprites.js"></script>
+  </body>
+</html>

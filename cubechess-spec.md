@@ -8,9 +8,9 @@ Every position on the board is represented as a 3D tuple: `(x, y, z)` where:
 *   **$X$ (File/Column):** `0` to `7` (corresponding to columns A to H).
 *   **$Y$ (Rank/Row):** `0` to `7` (corresponding to ranks 1 to 8).
 *   **$Z$ (Layer/Altitude):** `-2` to `+2`.
-    *   `+2`: **Sky High** (Top Layer)
+    *   `+2`: **Space** (Top Layer)
     *   `+1`: **Sky** (Upper Layer)
-    *   `0`: **Surface** (Standard Chess Board; all pieces start here)
+    *   `0`: **Ground** (Standard Chess Board; all pieces start here)
     *   `-1`: **Dungeon** (Lower Layer, contains static rocks)
     *   `-2`: **Abyss** (Bottom Layer, contains static rocks)
 

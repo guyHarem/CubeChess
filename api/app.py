@@ -35,9 +35,11 @@ def parse_coord(value):
 
 @app.route('/api/game/new', methods=['POST'])
 def new_game():
-    """Start a new game"""
-    response = game_manager.new_game()
-    return jsonify(convert_response(response))
+    """Start a new game. Optional body: {"rocks": true, "move_limit": 50}"""
+    data = request.get_json(silent=True) or {}
+    response = game_manager.new_game(rocks=bool(data.get("rocks", True)), move_limit=data.get("move_limit", 50))
+    status_code = 200 if response.get("success") else 400
+    return jsonify(convert_response(response)), status_code
 
 
 # ==================== QUERIES ====================

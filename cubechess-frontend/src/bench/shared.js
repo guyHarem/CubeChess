@@ -1,9 +1,9 @@
 // Helpers shared by the 2D and 3D views of the test bench
 
 export const LAYERS = [
-  { z: 2, name: 'Sky High' },
+  { z: 2, name: 'Space' },
   { z: 1, name: 'Sky' },
-  { z: 0, name: 'Surface' },
+  { z: 0, name: 'Ground' },
   { z: -1, name: 'Dungeon' },
   { z: -2, name: 'Abyss' },
 ]
