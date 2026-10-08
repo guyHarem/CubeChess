@@ -1,5 +1,6 @@
 import unittest
 from api.app import app, game_manager
+from engine.pieces import King, Rook
 
 
 class FakeTime:
@@ -44,6 +45,59 @@ class TestApi(unittest.TestCase):
         self.assertEqual(data["halfmove_clock"], 8)
         data = self.client.post('/api/game/undo').get_json()
         self.assertEqual((data["status"], data["draw_reason"]), ("ongoing", None))
+
+    def test_no_moves_after_a_draw(self):
+        dance = [([1, 0, 0], [2, 2, 0]), ([1, 7, 0], [2, 5, 0]), ([2, 2, 0], [1, 0, 0]), ([2, 5, 0], [1, 7, 0])]
+        for from_coord, to_coord in dance + dance:
+            self.move(from_coord, to_coord)
+        res = self.move([4, 1, 0], [4, 3, 0])
+        self.assertEqual(res.status_code, 400)
+        data = res.get_json()
+        self.assertEqual((data["error"], data["status"], len(data["move_history"])), ("The game is over", "draw", 8))
+        moves = self.client.get('/api/game/legal-moves', query_string={"from": "[4,1,0]"}).get_json()
+        self.assertEqual(moves["legal_moves"], [])
+        self.assertEqual(self.client.post('/api/game/resign').status_code, 400)
+        # Taking the drawing move back reopens the game
+        self.client.post('/api/game/undo')
+        self.assertEqual(self.move([2, 5, 0], [3, 3, 0]).status_code, 200)
+
+    def test_no_moves_after_checkmate(self):
+        self.client.post('/api/debug/setup', json={"size": 5, "z_min": 0, "z_max": 0, "pieces": [
+            {"coord": [0, 4, 0], "type": "King", "color": "black"},
+            {"coord": [0, 2, 0], "type": "King", "color": "white"},
+            {"coord": [4, 3, 0], "type": "Rook", "color": "white"}]})
+        data = self.move([4, 3, 0], [4, 4, 0]).get_json()
+        self.assertEqual((data["status"], data["winner"]), ("checkmate", "white"))
+        res = self.move([0, 4, 0], [1, 4, 0])
+        self.assertEqual((res.status_code, res.get_json()["error"]), (400, "The game is over"))
+        self.client.post('/api/game/new')
+
+    def test_history_says_which_other_pieces_could_have_moved(self):
+        data = self.move([1, 0, 0], [2, 2, 0]).get_json()
+        self.assertEqual(data["move_history"][-1]["ambiguous_from"], [])
+        self.client.post('/api/debug/setup', json={"rocks": False, "pieces": [
+            {"coord": [4, 0, 0], "type": "King", "color": "white"},
+            {"coord": [4, 7, 0], "type": "King", "color": "black"},
+            {"coord": [0, 1, 0], "type": "Knight", "color": "white"},
+            {"coord": [4, 1, 0], "type": "Knight", "color": "white"}]})
+        data = self.move([0, 1, 0], [2, 2, 0]).get_json()
+        self.assertEqual(data["move_history"][-1]["ambiguous_from"], [[4, 1, 0]])
+        self.client.post('/api/game/new')
+
+    def test_promotion_goes_through_when_the_mover_has_no_other_move(self):
+        # White's king is walled in by rocks; the half-finished turn must not count as stalemate
+        rocks = [[1, 0, -2], [0, 1, -2], [1, 1, -2], [0, 0, -1], [1, 0, -1], [0, 1, -1]]
+        self.client.post('/api/debug/setup', json={"rocks": False, "pieces": [
+            {"coord": [0, 0, -2], "type": "King", "color": "white"},
+            {"coord": [7, 7, 2], "type": "King", "color": "black"},
+            {"coord": [5, 6, 0], "type": "Pawn", "color": "white"}] + [
+            {"coord": coord, "type": "Rock"} for coord in rocks]})
+        data = self.move([5, 6, 0], [5, 7, 0]).get_json()
+        self.assertEqual((data["status"], data["pending_promotion"]), ("ongoing", [5, 7, 0]))
+        res = self.client.post('/api/game/promote', json={"coord": [5, 7, 0], "piece_type": "Queen"})
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.get_json()["board"]["[5, 7, 0]"], "Queen(white)")
+        self.client.post('/api/game/new')
 
     def test_new_game_options(self):
         data = self.client.post('/api/game/new', json={"rocks": False, "move_limit": 30}).get_json()
@@ -240,6 +294,31 @@ class TestClockAndResults(unittest.TestCase):
         res = self.move([4, 6, 0], [4, 4, 0])
         self.assertEqual(res.status_code, 400)
         self.assertEqual(res.get_json()["error"], "The game is over")
+
+    def timed_position(self, pieces):
+        """A timed game on a custom position (the sandbox endpoints have no clock)"""
+        self.new(clock={"initial": 30, "increment": 0})
+        game_manager.game.board.board = dict(pieces)
+        game_manager.game.reset_tracking()
+
+    def test_timeout_against_a_bare_king_is_a_draw(self):
+        self.timed_position({(4, 0, 0): King("white"), (0, 0, 0): Rook("white"), (4, 7, 0): King("black")})
+        self.move([0, 0, 0], [0, 1, 0])
+        self.move([4, 7, 0], [4, 6, 0])
+        self.time.tick(31)   # White, who has the rook, runs out; Black could never mate
+        data = self.state()
+        self.assertEqual((data["status"], data["winner"], data["draw_reason"]),
+                         ("timeout", None, "timeout_insufficient_material"))
+        self.assertEqual((data["current_player"], data["clock"]["white"], data["clock"]["running"]),
+                         ("white", 0, None))
+        self.assertEqual(self.move([0, 1, 0], [0, 2, 0]).get_json()["error"], "The game is over")
+
+    def test_timeout_still_loses_to_a_player_who_can_mate(self):
+        self.timed_position({(4, 0, 0): King("white"), (0, 0, 0): Rook("white"), (4, 7, 0): King("black")})
+        self.move([0, 0, 0], [0, 1, 0])
+        self.time.tick(31)   # Black, with the bare king, runs out
+        data = self.state()
+        self.assertEqual((data["status"], data["winner"], data["draw_reason"]), ("timeout", "white", None))
 
     def test_undo_puts_the_time_back(self):
         self.new(clock={"initial": 100, "increment": 0})

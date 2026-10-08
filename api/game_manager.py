@@ -22,7 +22,9 @@ class GameManager:
     def __init__(self):
         self.game = GameState()
         self.clock = None         # ChessClock, or None for an untimed game
-        self.result = None        # an ending the rules engine doesn't know: resignation, agreed draw, timeout
+        # An ending the rules engine doesn't know (resignation, agreed draw, timeout):
+        # {"kind", "winner"}, plus "draw_reason" when a timeout ends in a draw
+        self.result = None
         self._clock_stack = []    # clock snapshot before each turn, so undo can put the time back
         self._now = time.monotonic
 
@@ -48,12 +50,30 @@ class GameManager:
         if self.clock is not None and self.result is None:
             flagged = self.clock.flagged()
             if flagged is not None:
-                self.result = {"kind": "timeout", "winner": other(flagged)}
+                opponent = other(flagged)
+                # Running out of time only loses to an opponent who could still deliver checkmate
+                if self.game.has_insufficient_material(opponent):
+                    self.result = {"kind": "timeout", "winner": None,
+                                   "draw_reason": "timeout_insufficient_material"}
+                else:
+                    self.result = {"kind": "timeout", "winner": opponent}
                 self.clock.stop()
+
+    def _is_over(self):
+        """True once the game has ended: by a result, or by the rules (checkmate or any draw)"""
+        self._check_flag()
+        return self.result is not None or self._get_status(self.game.get_draw_reason()) not in ("ongoing", "check")
+
+    def _require_ongoing(self):
+        if self._is_over():
+            raise ValueError("The game is over")
 
     def _state_response(self):
         self._check_flag()
-        draw_reason = None if self.result is not None else self.game.get_draw_reason()
+        if self.result is not None:
+            draw_reason = self.result.get("draw_reason")
+        else:
+            draw_reason = self.game.get_draw_reason()
         status = self._get_status(draw_reason)
 
         winner = None
@@ -140,10 +160,12 @@ class GameManager:
         try:
             piece = self.game.get_board_state().get_piece(from_coord)
 
-            # Only the player to move has legal moves, and none while a promotion is pending
+            # Only the player to move has legal moves, none while a promotion is pending,
+            # and none once the game is over
             if (piece is None or isinstance(piece, Rock) or
                     piece.color != self.game.current_player or
-                    self.game.pending_promotion is not None):
+                    self.game.pending_promotion is not None or
+                    self._is_over()):
                 moves = []
             else:
                 moves = self.game.get_legal_moves(from_coord)
@@ -168,13 +190,14 @@ class GameManager:
 
     def make_move(self, from_coord, to_coord):
         try:
-            self._check_flag()
-            if self.result is not None:
-                raise ValueError("The game is over")
+            self._require_ongoing()
 
             mover = self.game.current_player
             snapshot = self.clock.snapshot() if self.clock is not None else None
+            ambiguous_from = self.game.get_ambiguous_origins(from_coord, to_coord)
             self.game.make_move(from_coord, to_coord)
+            # For move notation: the other pieces of the same kind that could have made this move
+            self.game.move_history[-1]["ambiguous_from"] = ambiguous_from
             self._clock_stack.append(snapshot)
             self._finish_turn(mover)
             return self._mark_check(self._state_response())
@@ -183,9 +206,7 @@ class GameManager:
 
     def promote_pawn(self, coord, new_piece):
         try:
-            self._check_flag()
-            if self.result is not None:
-                raise ValueError("The game is over")
+            self._require_ongoing()
 
             mover = self.game.current_player
             self.game.promote_pawn(coord, new_piece)
@@ -198,13 +219,11 @@ class GameManager:
 
     def resign(self, color=None):
         try:
-            self._check_flag()
             if color is None:
                 color = self.game.current_player
             if color not in ("white", "black"):
                 raise ValueError(f"Invalid color: {color}")
-            if self.result is not None or self._state_response()["status"] not in ("ongoing", "check"):
-                raise ValueError("The game is over")
+            self._require_ongoing()
             self.result = {"kind": "resigned", "winner": other(color)}
             return self._state_response()
         except ValueError as e:
@@ -212,9 +231,7 @@ class GameManager:
 
     def agree_draw(self):
         try:
-            self._check_flag()
-            if self.result is not None or self._state_response()["status"] not in ("ongoing", "check"):
-                raise ValueError("The game is over")
+            self._require_ongoing()
             self.result = {"kind": "agreed_draw", "winner": None}
             return self._state_response()
         except ValueError as e:

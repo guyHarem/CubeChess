@@ -317,6 +317,83 @@ class TestDraw(unittest.TestCase):
                             (2, 0, 0): Bishop("white"), (3, 0, 0): Queen("white")})
         self.assertFalse(game.is_insufficient_material())
 
+    def test_insufficient_material_is_judged_for_each_player(self):
+        game = custom_game({(4, 0, 0): King("white"), (4, 7, 0): King("black"),
+                            (0, 0, 0): Rook("white"), (1, 7, 0): Knight("black")})
+        self.assertFalse(game.has_insufficient_material("white"))
+        self.assertTrue(game.has_insufficient_material("black"))
+        self.assertFalse(game.is_insufficient_material())
+
+    def test_bishops_on_one_square_color_cannot_mate(self):
+        same = custom_game({(4, 0, 0): King("white"), (4, 7, 0): King("black"),
+                            (0, 0, 0): Bishop("white"), (1, 1, 0): Bishop("white")})
+        self.assertTrue(same.has_insufficient_material("white"))
+        mixed = custom_game({(4, 0, 0): King("white"), (4, 7, 0): King("black"),
+                             (0, 0, 0): Bishop("white"), (1, 0, 0): Bishop("white")})
+        self.assertFalse(mixed.has_insufficient_material("white"))
+
+    def test_no_draw_while_a_pawn_waits_for_promotion(self):
+        # White's king is walled in by rocks, so until the pawn is promoted White has no move at all
+        pieces = {(0, 0, -2): King("white"), (7, 7, 2): King("black"), (5, 6, 0): moved(Pawn("white"))}
+        for coord in King("white").get_possible_moves((0, 0, -2)):
+            pieces[coord] = Rock()
+        game = custom_game(pieces, rocks=False)
+        self.assertEqual(game.get_legal_moves((0, 0, -2)), [])
+        game.make_move((5, 6, 0), (5, 7, 0))
+        self.assertEqual(game.pending_promotion, (5, 7, 0))
+        self.assertTrue(game.is_stalemate("white"))  # true of the half-finished turn, but not a result
+        self.assertIsNone(game.get_draw_reason())
+        game.promote_pawn((5, 7, 0), Queen("white"))
+        self.assertIsNone(game.get_draw_reason())
+
+    def test_no_draw_rules_without_both_kings(self):
+        # A practice board: one knight and nothing else is not "insufficient material"
+        game = GameState()
+        game.board.board = {}
+        game.board.set_piece(Knight("white"), (3, 3, 0))
+        game.reset_tracking()
+        self.assertIsNone(game.get_draw_reason())
+        game.make_move((3, 3, 0), (4, 5, 0))  # black, with no pieces, is not "stalemated" either
+        self.assertIsNone(game.get_draw_reason())
+
+
+class TestAmbiguousOrigins(unittest.TestCase):
+    """Which other pieces could have made the same move (move notation needs to tell them apart)"""
+
+    def test_usually_nobody_else_could_make_the_move(self):
+        game = GameState()
+        self.assertEqual(game.get_ambiguous_origins((1, 0, 0), (2, 2, 0)), [])
+        self.assertEqual(game.get_ambiguous_origins((4, 1, 0), (4, 3, 0)), [])
+        self.assertEqual(game.get_ambiguous_origins((3, 3, 0), (3, 4, 0)), [])  # empty square
+
+    def test_two_knights_reaching_one_square(self):
+        game = custom_game({(4, 0, 0): King("white"), (4, 7, 0): King("black"),
+                            (0, 1, 0): Knight("white"), (4, 1, 0): Knight("white")}, rocks=False)
+        self.assertEqual(game.get_ambiguous_origins((0, 1, 0), (2, 2, 0)), [(4, 1, 0)])
+        self.assertEqual(game.get_ambiguous_origins((4, 1, 0), (2, 2, 0)), [(0, 1, 0)])
+        self.assertEqual(game.get_ambiguous_origins((0, 1, 0), (1, 3, 0)), [])
+
+    def test_a_pinned_piece_does_not_count(self):
+        game = custom_game({(4, 0, 0): King("white"), (4, 7, 1): King("black"),
+                            (0, 1, 0): Knight("white"), (4, 1, 0): Knight("white"),
+                            (4, 5, 0): Rook("black")}, rocks=False)
+        self.assertEqual(game.get_legal_moves((4, 1, 0)), [])
+        self.assertEqual(game.get_ambiguous_origins((0, 1, 0), (2, 2, 0)), [])
+
+    def test_other_kinds_and_the_opponent_do_not_count(self):
+        game = custom_game({(4, 0, 0): King("white"), (4, 7, 0): King("black"),
+                            (0, 3, 0): Rook("white"), (7, 3, 0): Queen("white"),
+                            (3, 6, 0): Rook("black")}, rocks=False)
+        self.assertEqual(game.get_ambiguous_origins((0, 3, 0), (3, 3, 0)), [])
+
+    def test_pawns_on_different_layers_stepping_to_one_square(self):
+        game = custom_game({(4, 0, 0): King("white"), (4, 7, 0): King("black"),
+                            (2, 3, 0): moved(Pawn("white")), (2, 3, 1): moved(Pawn("white")),
+                            (2, 3, -1): moved(Pawn("white"))}, rocks=False)
+        self.assertEqual(sorted(game.get_ambiguous_origins((2, 3, 0), (2, 4, 0))), [(2, 3, -1), (2, 3, 1)])
+        # The Sky pawn cannot reach the Dungeon in one step
+        self.assertEqual(game.get_ambiguous_origins((2, 3, -1), (2, 4, -1)), [(2, 3, 0)])
+
 
 class TestSmallBoard(unittest.TestCase):
     def small(self, pieces, current_player="white"):

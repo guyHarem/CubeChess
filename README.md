@@ -112,11 +112,21 @@ Coordinates are `[x, y, z]` lists. Every game-state response carries `current_pl
 `halfmove_clock`, `move_limit`, `clock`, `board_size`, `pending_promotion` and `move_history`. Failed requests return
 HTTP 400 with `success: false` and an `error` message.
 
+**Move history:** each entry has `from`, `to`, `moving_piece`, `captured_piece`,
+`promotion_piece`, `special_move` (`castling`, `en_passant`, `promotion` or `null`), `check`
+(`check`, `checkmate` or `null`) and `ambiguous_from`: the squares of other pieces of the same
+kind and color that could legally have made the same move. Move notation uses it to say which
+piece moved (as in `Nbd2`).
+
 **Draws:** `draw_reason` is `null` or one of `stalemate`, `repetition` (the same position
 occurred three times), `move_limit` (`move_limit` moves by each player, 50 by default, with
 no capture and no pawn move; `halfmove_clock` counts the single moves so far) or
-`insufficient_material`. Draws are reported automatically; the engine itself does not block
-further moves after one, so the UI decides when to stop the game.
+`insufficient_material`. The draw rules only apply while both kings are on the board, so
+practice positions without kings never end in a draw.
+
+**Game over:** once the game has ended (checkmate, any draw, resignation, agreement or
+timeout), moving, promoting, resigning and offering a draw are refused with
+`"The game is over"`, and `legal-moves` returns an empty list. Undo reopens the game.
 
 **Two games:** the server keeps a `main` game and a separate `practice` game used by the
 lessons. Every endpoint works on `main` unless the request adds `?game=practice`.
@@ -125,6 +135,9 @@ lessons. Every endpoint works on `main` unless the request adds `?game=practice`
 `{"initial", "increment", "white", "black", "running"}` in seconds. A player's clock runs only
 on their turn and starts after White's first move; `increment` is added after each timed move.
 When the player to move runs out, `status` becomes `timeout` and the opponent is the `winner`.
+If that opponent could never checkmate (a lone king, king and one knight or bishop, or king and
+bishops on one square color), the game is drawn instead: `winner` is `null` and `draw_reason`
+is `timeout_insufficient_material`.
 Undo puts the clocks back to where they were before that turn.
 
 **Board size:** the engine works on any board from 4×4 to 8×8 with layers between -2 and 2.

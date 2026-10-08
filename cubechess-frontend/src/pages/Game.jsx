@@ -19,7 +19,15 @@ function outcomeOf(game) {
   const wins = game.winner ? `${NAMES[game.winner]} wins` : 'Draw'
   if (game.status === 'checkmate') return { title: wins, detail: 'Checkmate.' }
   if (game.status === 'resigned') return { title: wins, detail: `${NAMES[otherColor(game.winner)]} resigned.` }
-  if (game.status === 'timeout') return { title: wins, detail: `${NAMES[otherColor(game.winner)]} ran out of time.` }
+  if (game.status === 'timeout') {
+    if (game.winner) return { title: wins, detail: `${NAMES[otherColor(game.winner)]} ran out of time.` }
+    // The clock only runs for the player to move, so that is who ran out
+    const late = game.current_player
+    return {
+      title: 'Draw',
+      detail: `${NAMES[late]} ran out of time, but ${NAMES[otherColor(late)]} has too few pieces to checkmate.`,
+    }
+  }
   if (game.status === 'agreed_draw') return { title: 'Draw', detail: 'Both players agreed to a draw.' }
   const reasons = {
     stalemate: `${NAMES[game.current_player]} has no legal move and is not in check.`,

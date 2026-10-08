@@ -61,6 +61,21 @@ export function layersOf(boardSize) {
 
 const squareName = ([x, y]) => `${FILES[x]}${y + 1}`
 
+// What notation writes before the destination to say which piece moved. Normally nothing
+// (a capturing pawn always names its file). When another piece of the same kind could have
+// made the move, the shortest of these that tells them apart: file, rank, square, or the
+// square with its layer mark.
+function originOf(entry, piece, takes) {
+  const rivals = entry.ambiguous_from ?? []
+  const [x, y, z] = entry.from
+  const pawnTakes = piece.type === 'Pawn' && takes
+  if (rivals.length === 0) return pawnTakes ? FILES[x] : ''
+  if (rivals.every((rival) => rival[0] !== x)) return FILES[x]
+  if (!pawnTakes && rivals.every((rival) => rival[1] !== y)) return String(y + 1)
+  if (rivals.every((rival) => rival[0] !== x || rival[1] !== y)) return squareName(entry.from)
+  return `${squareName(entry.from)}${layerOf(z)?.mark ?? ''}`
+}
+
 // Move history → score-sheet rows: [{ number, white: move, black: move }]
 // A move is { text, mark, z, suffix }: standard chess notation, then the layer mark
 // (nothing on the Ground), then + or #.
@@ -85,8 +100,7 @@ export function scoreSheet(history) {
       text = entry.to[0] > entry.from[0] ? 'O-O' : 'O-O-O'
     } else {
       const takes = entry.captured_piece ? 'x' : ''
-      const from = piece.type === 'Pawn' && takes ? FILES[entry.from[0]] : ''
-      text = `${LETTERS[piece.type]}${from}${takes}${squareName(entry.to)}`
+      text = `${LETTERS[piece.type]}${originOf(entry, piece, takes)}${takes}${squareName(entry.to)}`
     }
     const z = entry.to[2]
     moves.push({ color: piece.color, text, z, mark: layerOf(z)?.mark ?? '', suffix })

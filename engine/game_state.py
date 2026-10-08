@@ -441,6 +441,25 @@ class GameState:
         
         return legal_moves
       
+    def get_ambiguous_origins(self, from_coord, to_coord):
+        """Coords of the other pieces of the same type and color that could legally make this
+        move too. Move notation needs them to say which piece moved (as in "Nbd2")."""
+        piece = self.board.get_piece(from_coord)
+        if piece is None or isinstance(piece, Rock):
+            return []
+        
+        origins = []
+        for coord, other in self.find_piece_by_type(type(piece), piece.color):
+            if coord == from_coord:
+                continue
+            # Cheap check on the piece's shape of movement before the full legality test
+            reachable = other.get_possible_moves(coord, self.board.bounds)
+            if isinstance(other, Pawn):
+                reachable = list(reachable[0]) + list(reachable[1])
+            if to_coord in reachable and to_coord in self.get_legal_moves(coord):
+                origins.append(coord)
+        return origins
+    
     def is_legal_move(self, from_coord, to_coord):
         piece_to_move = self.board.get_piece(from_coord)
         if piece_to_move is None or isinstance(piece_to_move, Rock):
@@ -703,45 +722,31 @@ class GameState:
         return material
     
     
+    def has_insufficient_material(self, color):
+        """Check if this player's pieces could never deliver checkmate: a lone king,
+        king + one knight or bishop, or king + bishops that all stand on one square color"""
+        material = self._get_material_count(color)
+        total_pieces = sum(material.values())
+        
+        # King only
+        if total_pieces == 0:
+            return True
+        
+        # King + 1 minor piece (Knight or Bishop)
+        if total_pieces == 1:
+            return material['Knight'] == 1 or material['Bishop'] == 1
+        
+        # King + only bishops, all on same color squares (can't mate)
+        if material['Bishop'] == total_pieces:
+            bishops = self.find_piece_by_type(Bishop, color)
+            square_colors = {bishop.get_square_color(coord) for coord, bishop in bishops}
+            return len(square_colors) == 1
+        
+        return False
+    
     def is_insufficient_material(self):
         """Check if both players have insufficient material to force checkmate"""
-        white_material = self._get_material_count(white)
-        black_material = self._get_material_count(black)
-        
-        # Helper to check if a player's material is insufficient
-        def is_insufficient(color, material):
-            total_pieces = sum(material.values())
-            
-            # King only
-            if total_pieces == 0:
-                return True
-            
-            # King + 1 minor piece (Knight or Bishop)
-            if total_pieces == 1:
-                return material['Knight'] == 1 or material['Bishop'] == 1
-            
-            # King + only bishops, all on same color squares (can't mate)
-            if material['Bishop'] == total_pieces:
-                # Get all bishops for this color with their coordinates
-                bishops = self.find_piece_by_type(Bishop, color)
-                if len(bishops) > 0:
-                    # Get square color of first bishop using its method
-                    first_bishop_color = bishops[0][1].get_square_color(bishops[0][0])
-                    
-                    # Check if ALL bishops are on same color
-                    all_same_color = all(
-                        bishop_piece.get_square_color(bishop_coord) == first_bishop_color
-                        for bishop_coord, bishop_piece in bishops
-                    )
-                    
-                    # If all bishops same color and no other pieces: insufficient
-                    if all_same_color:
-                        return True
-            
-            return False
-        
-        # Draw if BOTH players have insufficient material
-        return is_insufficient(white, white_material) and is_insufficient(black, black_material)
+        return self.has_insufficient_material(white) and self.has_insufficient_material(black)
     
     
     # ==================== DRAW RULES ====================
@@ -783,6 +788,12 @@ class GameState:
     def get_draw_reason(self):
         """Why the game is a draw: "stalemate", "repetition", "move_limit",
         "insufficient_material", or None if it is not a draw"""
+        # The turn is not over while a pawn waits for promotion
+        if self.pending_promotion is not None:
+            return None
+        # A practice position without both kings has no game to draw
+        if self.white_king_pos is None or self.black_king_pos is None:
+            return None
         # A checkmate delivered on the very move that would trigger a draw still wins
         if self.is_checkmate(self.current_player):
             return None
