@@ -14,7 +14,7 @@ export const CLOCK_PRESETS = [
   { mode: 'none', label: 'No clock' },
   { mode: '5', label: '5 min', initial: 300, increment: 0 },
   { mode: '10', label: '10 min', initial: 600, increment: 0 },
-  { mode: '15+10', label: '15 min + 10 s', initial: 900, increment: 10 },
+  { mode: '10+3', label: '10 min + 3 s', initial: 600, increment: 3 },
   { mode: 'custom', label: 'Custom' },
 ]
 

@@ -86,6 +86,7 @@ export function useGame(which = 'main') {
     select,
     refresh,
     setup: (position) => call('/debug/setup', position),
+    move: (from, to) => call('/game/move', { from, to }),
     resign: (color) => call('/game/resign', { color }),
     agreeDraw: () => call('/game/draw', {}),
     newGame: (options) => call('/game/new', options ?? {}),

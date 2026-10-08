@@ -116,6 +116,16 @@ function makeBoard(pieces, rocks = []) {
   return board
 }
 
+// A board for pictures from the API's piece list: [{ coord, type, color }]
+export function boardFromPieces(pieces, withRocks = false) {
+  const board = {}
+  if (withRocks) for (const coord of ROCKS) board[keyOf(coord)] = 'Rock'
+  for (const piece of pieces) {
+    board[keyOf(piece.coord)] = piece.type === 'Rock' ? 'Rock' : `${piece.type}(${piece.color})`
+  }
+  return board
+}
+
 export const START_BOARD = makeBoard(
   BACK_RANK.flatMap((type, x) => [
     [type, 'white', x, 0, 0], ['Pawn', 'white', x, 1, 0], ['Pawn', 'black', x, 6, 0], [type, 'black', x, 7, 0],

@@ -24,7 +24,8 @@ A 3D chess variant on a 5-layer cube board. This is a **work in progress (WIP)**
 - ✅ Three.js 3D board: cube-shaped cells, 3D pieces, layer tools, camera controls
 - ✅ Move list, captured material, chess clock with increment, undo, resign and draw by agreement
 - ✅ Lesson player: nine lessons on a 5×5 three-layer board (`cubechess-frontend/src/lessons.json`)
-- ⏳ Scenarios, computer opponent, online play
+- ✅ Scenario player: 30 checkmate puzzles in four tiers (`cubechess-frontend/src/scenarios.json`)
+- ⏳ Computer opponent, online play
 - 🔧 Developer test bench at `#/bench` for checking backend behavior
 
 ### Phase 3: Polish & Deployment (Not Started)
@@ -73,11 +74,15 @@ python -m unittest discover -s tests
 cd cubechess-frontend
 npm install
 npm run dev
-# App runs on http://localhost:5173
+# App runs on http://localhost:5173 (Vite picks the next free port if that one is taken)
 ```
 
+The scenarios are generated, not hand-written: `python tools/generate_scenarios.py` searches
+random positions for ones where White has exactly one way to force mate, and rewrites
+`scenarios.json`. `tests/test_scenarios.py` re-checks every puzzle against the engine.
+
 Pages (hash routes): `#/` home, `#/setup` new game, `#/game` the board, `#/learn` lessons,
-`#/bench` the developer test bench. The frontend needs the backend running; Vite proxies `/api` to port 5001.
+`#/scenarios` puzzles, `#/bench` the developer test bench. The frontend needs the backend running; Vite proxies `/api` to port 5001.
 
 The layers are named, top to bottom: Space, Sky, Ground, Dungeon, Abyss. Move notation is
 standard chess notation plus a layer mark for moves that land off the Ground:

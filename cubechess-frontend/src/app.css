@@ -1243,3 +1243,217 @@ legend {
     min-height: 300px;
   }
 }
+
+/* ---------- scenarios: the list ---------- */
+
+.scenarios-main {
+  flex: 1;
+  width: 100%;
+  max-width: 1320px;
+  margin: 0 auto;
+  padding: 28px 40px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 400px;
+  gap: 48px;
+  align-items: start;
+}
+
+.scenarios-list {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.scenarios-intro {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.scenarios-intro h1 {
+  font-size: 40px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.scenarios-intro p:not(.help) {
+  max-width: 560px;
+  font-size: 18px;
+  color: var(--soft);
+}
+
+.tier {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.tier h2 {
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.tier h2 span {
+  margin-left: 8px;
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.tiles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.tile {
+  width: 64px;
+  height: 64px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--soft);
+  cursor: pointer;
+}
+
+.tile strong {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.tile small {
+  min-height: 11px;
+  font-size: 11px;
+  line-height: 1;
+}
+
+.tile:hover {
+  border-color: var(--border-strong);
+}
+
+.tile.is-solved {
+  border-color: #2f6338;
+  background: #16291a;
+  color: #c4ebb9;
+}
+
+.tile.is-next {
+  border-color: var(--accent);
+  background: #2a2110;
+  color: var(--accent);
+}
+
+.tile.is-picked {
+  box-shadow: 0 0 0 2px var(--text);
+}
+
+.scenario-preview {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-panel);
+  background: var(--panel);
+}
+
+.scenario-preview h2,
+.solve-info h1 {
+  margin: 4px 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.scenario-preview p:not(.help),
+.solve-goal {
+  font-size: 17px;
+  color: var(--soft);
+}
+
+.scenario-picture {
+  height: 300px;
+  overflow: hidden;
+}
+
+/* ---------- scenarios: playing one, on one screen ---------- */
+
+.solve {
+  height: 100dvh;
+  min-height: 620px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.solve-main {
+  flex: 1;
+  min-height: 0;
+  padding: 20px 28px;
+  display: grid;
+  grid-template-columns: 290px minmax(0, 1fr) 270px;
+  gap: 28px;
+}
+
+.solve-info,
+.solve-side {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.solve-side h2 {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--soft);
+}
+
+.solve-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.solve-board {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+/* "Next" is always there, but it only stands out once the scenario is solved */
+.button.is-quiet {
+  border-color: var(--border);
+  background: var(--surface);
+  color: var(--soft);
+  font-weight: 400;
+}
+
+@media (max-width: 1000px) {
+  .scenarios-main,
+  .solve-main {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 16px;
+  }
+
+  .solve {
+    height: auto;
+    overflow: visible;
+  }
+
+  .solve-board .board-frame {
+    flex: none;
+    height: 80vw;
+    min-height: 300px;
+  }
+}

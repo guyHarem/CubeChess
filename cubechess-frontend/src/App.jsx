@@ -1,9 +1,9 @@
 import { lazy, Suspense } from 'react'
 import { useRoute } from './lib/router.js'
-import ComingSoon from './pages/ComingSoon.jsx'
 import Game from './pages/Game.jsx'
 import Home from './pages/Home.jsx'
 import Learn from './pages/Learn.jsx'
+import Scenarios from './pages/Scenarios.jsx'
 import Setup from './pages/Setup.jsx'
 import './app.css'
 
@@ -16,9 +16,7 @@ export default function App() {
   if (route === '/setup') return <Setup />
   if (route === '/game') return <Game />
   if (route === '/learn') return <Learn />
-  if (route === '/scenarios') {
-    return <ComingSoon title="Scenarios are on the way">The scenario player is designed but not built yet. It is next.</ComingSoon>
-  }
+  if (route.startsWith('/scenarios')) return <Scenarios id={route.split('/')[2]} />
   if (route === '/bench') {
     return (
       <Suspense fallback={null}>
