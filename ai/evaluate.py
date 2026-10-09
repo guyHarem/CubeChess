@@ -12,22 +12,24 @@ the parameters to who won.
 """
 from ai.tables import PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING, BLACK
 
-# Tuned by self-play (tools/tune.py). The starting guesses came from how many squares each
+# Tuned by self-play (tools/tune.py), two rounds of 2,000 games. Each round had to win a
+# match before it was kept: round one beat the first guesses 228-23 (49 draws), round two
+# beat round one 253-196 (151 draws). The starting guesses came from how many squares each
 # piece reaches on an empty board compared with ordinary chess; FIRST_GUESSES keeps them.
 DEFAULT_PARAMS = {
     # What a piece is worth (the pawn is the fixed yardstick)
-    "pawn": 100, "knight": 447, "bishop": 477, "rook": 476, "queen": 1168,
+    "pawn": 100, "knight": 375, "bishop": 430, "rook": 444, "queen": 1189,
     # ... plus this much for each square it could reach, above its average. (A rook reaches
     # the same number of squares from everywhere, so it has no such term.)
-    "reach_knight": 4.84, "reach_bishop": 0.97, "reach_queen": -0.14,
+    "reach_knight": 4.57, "reach_bishop": -0.51, "reach_queen": -1.18,
     # ... plus this much for each layer it stands away from the Ground
-    "layer_knight": -5.36, "layer_bishop": -13.45, "layer_rook": -29.0, "layer_queen": 0.24,
+    "layer_knight": -7.55, "layer_bishop": -17.52, "layer_rook": -18.71, "layer_queen": 12.46,
     # A pawn that has advanced 1, 2, ... ranks (5 = one step from promotion on the full board)
-    "pawn_advance_1": -3.74, "pawn_advance_2": 2.7, "pawn_advance_3": 65, "pawn_advance_4": 158, "pawn_advance_5": 164,
-    "pawn_central": 3.34,    # scales the bonus for central pawns stepping forward
-    "pawn_layer": 3.62,      # per layer away from the Ground, until the pawn is far advanced
+    "pawn_advance_1": 2.43, "pawn_advance_2": 9.4, "pawn_advance_3": 75, "pawn_advance_4": 237, "pawn_advance_5": 220,
+    "pawn_central": 3.85,    # scales the bonus for central pawns stepping forward
+    "pawn_layer": 5.94,      # per layer away from the Ground, until the pawn is far advanced
     # King: per rank it has left its back rank (up to 4), and per layer away from the Ground
-    "king_rank": -19.0, "king_layer": -9.28,
+    "king_rank": -14.17, "king_layer": 2.89,
 }
 FIRST_GUESSES = {
     "pawn": 100, "knight": 480, "bishop": 500, "rook": 540, "queen": 1150,

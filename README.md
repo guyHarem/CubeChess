@@ -90,8 +90,9 @@ The computer is not trained; it plays like a classic chess program (`ai/`):
 2. It looks ahead: its moves, your replies, its answers (`ai/search.py`, alpha-beta search).
    Lines that are already worse than one it has found are dropped, and at the end of a line
    it follows captures until the position is quiet.
-3. It scores the positions it reaches by material and placement (`ai/evaluate.py`). The piece
-   values are first guesses for 3D (pawn 1, knight 4.8, bishop 5, rook 5.4, queen 11.5).
+3. It scores the positions it reaches by material and placement (`ai/evaluate.py`). The
+   numbers were tuned by self-play: pawn 1, knight 3.75, bishop 4.3, rook 4.4, queen 11.9,
+   and a pawn two steps from promotion is worth about 3.4.
 
 | Level | Looks ahead | Picks |
 |---|---|---|
@@ -103,6 +104,8 @@ Every scoring number is a named parameter in `ai/evaluate.py`. `python tools/tun
 them by self-play in three steps: `games` (the computer plays itself and saves the quiet
 positions with each game's result), `fit` (find the parameters whose score best predicts
 who won) and `match` (the new numbers play the current ones; keep them only if they win).
+Two rounds of 2,000 games have been run. Round one beat the first guesses 228-23 with 49
+draws; round two beat round one 253-196 with 151 draws.
 
 `python tools/play_match.py` plays the levels against each other (hard beat medium 40-0 and
 medium beat easy 20-0), and is the way to check that a change makes the computer stronger.

@@ -77,10 +77,13 @@ def choose_move(game, level="hard", seconds=None, rng=None, nodes=None, params=N
 
 
 def accepts_draw(game, computer_color, level="hard"):
-    """Would the computer agree to a draw now? Yes when it judges itself worse, or when the
-    game is level and has gone on for at least 30 moves each."""
+    """Would the computer agree to a draw now? Yes when it judges itself clearly worse, or
+    when the game is level and has gone on for at least 30 moves each."""
     board = FastBoard.from_game_state(game)
-    result = Search(board).run(max_depth=3, seconds=0.5)
     to_move = "black" if board.side else "white"
-    score = result.score if to_move == computer_color else -result.score
-    return score <= -80 or (abs(score) <= 30 and len(game.move_history) >= 60)
+    # Looking an odd number of moves ahead flatters the player to move and an even number
+    # the other one, so judge by the middle of the two
+    score = sum(Search(board).run(max_depth=depth, seconds=0.5).score for depth in (2, 3)) / 2
+    if to_move != computer_color:
+        score = -score
+    return score <= -120 or (abs(score) <= 40 and len(game.move_history) >= 60)
