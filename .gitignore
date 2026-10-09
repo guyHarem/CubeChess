@@ -46,3 +46,6 @@ wheels/
 .env.local
 .env.*.local
 *.log
+
+# Self-play data for tuning the computer player
+tools/data/

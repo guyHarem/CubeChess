@@ -99,6 +99,11 @@ The computer is not trained; it plays like a classic chess program (`ai/`):
 | Medium | 2 moves, following captures | at random among moves within 0.3 pawns |
 | Hard | as deep as 3 seconds allow (usually 4 to 5 moves) | the best move |
 
+Every scoring number is a named parameter in `ai/evaluate.py`. `python tools/tune.py` tunes
+them by self-play in three steps: `games` (the computer plays itself and saves the quiet
+positions with each game's result), `fit` (find the parameters whose score best predicts
+who won) and `match` (the new numbers play the current ones; keep them only if they win).
+
 `python tools/play_match.py` plays the levels against each other (hard beat medium 40-0 and
 medium beat easy 20-0), and is the way to check that a change makes the computer stronger.
 The server does the thinking in a worker process (`api/thinker.py`).

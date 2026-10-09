@@ -8,7 +8,7 @@ takes back moves in place, which is about a thousand times faster.
 A cell holds 0 (empty), ROCK, or piece type | colour bit | UNMOVED bit.
 A move is one integer: from | to << 9 | promotion piece << 18 | kind << 21.
 """
-from ai.evaluate import build_piece_square_values
+from ai.evaluate import build_piece_square_values, DEFAULT_PARAMS
 from ai.tables import (tables_for, PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING, ROCK,
                        WHITE, BLACK, UNMOVED)
 
@@ -38,10 +38,13 @@ def move_promotion(move):
 
 
 class FastBoard:
-    def __init__(self, size=8, z_min=-2, z_max=2):
+    def __init__(self, size=8, z_min=-2, z_max=2, params=None):
+        """params: scoring parameters (see ai/evaluate.py); the tuned defaults when left out"""
         self.t = tables = tables_for(size, z_min, z_max)
-        if tables.pst is None:
-            tables.pst = build_piece_square_values(tables)
+        key = tuple(sorted((params or DEFAULT_PARAMS).items()))
+        if key not in tables.pst_cache:
+            tables.pst_cache[key] = build_piece_square_values(tables, params)
+        self.pst = tables.pst_cache[key]   # what each piece is worth on each square
         self.cells = [0] * tables.n
         self.side = WHITE                  # WHITE (0) or BLACK (8) to move
         self.squares = (set(), set())      # where each colour's pieces stand
@@ -61,11 +64,11 @@ class FastBoard:
     # ==================== BUILDING A POSITION ====================
 
     @classmethod
-    def from_game_state(cls, game):
+    def from_game_state(cls, game, params=None):
         """Copy a live game (which must not be waiting for a promotion choice)"""
         if game.pending_promotion is not None:
             raise ValueError("Promote the pawn before asking the computer to think")
-        board = cls(*game.board.bounds)
+        board = cls(*game.board.bounds, params=params)
         index = board.t.index
         for coord, piece in game.board.board.items():
             name = type(piece).__name__
@@ -93,7 +96,7 @@ class FastBoard:
         colour = (code & BLACK) >> 3
         self.squares[colour].add(square)
         self.counts[base] += 1
-        self.score += self.t.pst[base][square]
+        self.score += self.pst[base][square]
         self.pieces_key ^= self.t.z_piece[base][square]
         if code & 7 == KING:
             self.kings[colour] = square
@@ -418,7 +421,7 @@ class FastBoard:
                            self.score, self.pieces_key, self.rights_key, self.key))
         self.history.append(self.key)
 
-        pst, z = tables.pst, tables.z_piece
+        pst, z = self.pst, tables.z_piece
         score = self.score - pst[placed][origin]
         pieces_key = self.pieces_key ^ z[placed][origin]
         promotion = (move >> 18) & 7

@@ -11,7 +11,7 @@ import time
 import unittest
 
 from ai.board import FastBoard
-from ai.evaluate import MATE
+from ai.evaluate import DEFAULT_PARAMS, MATE, position_features
 from ai.levels import LEVELS, accepts_draw, choose_move, think_time
 from ai.search import Search
 from api.game_manager import GameManager
@@ -174,6 +174,45 @@ class TestDrawOffers(unittest.TestCase):
                          (3, 0, 0): Queen("white"), (0, 0, 0): Rook("white"), (6, 7, 0): Knight("black")})
         self.assertTrue(accepts_draw(game, "black"))
         self.assertFalse(accepts_draw(game, "white"))
+
+
+class TestScoringParameters(unittest.TestCase):
+    """The scoring numbers are named parameters, so that tools/tune.py can fit them"""
+
+    def test_the_score_is_the_features_times_the_parameters(self):
+        rng = random.Random(3)
+        game = GameState()
+        for ply in range(40):
+            board = FastBoard.from_game_state(game)
+            features = position_features(board)
+            expected = sum(DEFAULT_PARAMS[name] * amount for name, amount in features.items())
+            # Each piece's value is rounded to a whole number, so allow half a point per piece
+            pieces_on_board = len(board.squares[0]) + len(board.squares[1])
+            self.assertAlmostEqual(board.score, expected, delta=pieces_on_board / 2 + 0.01, msg=f"ply {ply}")
+            move = rng.choice(board.legal_moves())
+            from_coord, to_coord, promotion = board.describe(move)
+            game.make_move(from_coord, to_coord)
+            if game.pending_promotion is not None:
+                game.promote_pawn(to_coord, Queen("white" if ply % 2 == 0 else "black"))
+
+    def test_other_parameters_give_other_scores_without_disturbing_the_defaults(self):
+        game = position({(4, 0, 0): King("white"), (4, 7, 0): King("black"),
+                         (3, 0, 0): Queen("white"), (0, 7, 0): Rook("black"), (7, 7, 0): Rook("black")})
+        usual = FastBoard.from_game_state(game).score
+        queen_lover = FastBoard.from_game_state(game, {**DEFAULT_PARAMS, "queen": DEFAULT_PARAMS["queen"] + 300}).score
+        self.assertEqual(queen_lover, usual + 300)
+        self.assertEqual(FastBoard.from_game_state(game).score, usual)
+
+    def test_parameters_change_what_the_computer_plays(self):
+        # A rook and a knight are both free to take; which one depends on what they are worth
+        game = position({(4, 0, 0): King("white"), (4, 7, 0): King("black"), (0, 3, 0): Queen("white"),
+                         (0, 6, 0): Rook("black"), (3, 3, 0): Knight("black")})
+        takes = {}
+        for name in ("rook", "knight"):
+            params = {**DEFAULT_PARAMS, "rook": 300, "knight": 300, name: 900}
+            choice = choose_move(game, "medium", rng=random.Random(1), params=params)
+            takes[name] = choice.to_coord
+        self.assertEqual(takes, {"rook": (0, 6, 0), "knight": (3, 3, 0)})
 
 
 class TestScores(unittest.TestCase):

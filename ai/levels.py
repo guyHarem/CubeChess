@@ -45,14 +45,15 @@ def think_time(level, clock_left=None, increment=0):
     return max(0.05, min(seconds, clock_left / 25 + increment * 0.8))
 
 
-def choose_move(game, level="hard", seconds=None, rng=None, nodes=None):
+def choose_move(game, level="hard", seconds=None, rng=None, nodes=None, params=None):
     """Pick a move for the player to move in a GameState. Returns a Choice, or None when
-    there is no legal move. seconds overrides the level's own thinking time."""
+    there is no legal move. seconds overrides the level's own thinking time; params swaps in
+    other scoring parameters (used when tuning)."""
     if level not in LEVELS:
         raise ValueError(f"Unknown level: {level}")
     settings = LEVELS[level]
     rng = rng or random
-    board = FastBoard.from_game_state(game)
+    board = FastBoard.from_game_state(game, params)
     margin = settings["margin"]
     full_armies = len(board.squares[0]) == 16 and len(board.squares[1]) == 16
     if level == "hard" and full_armies and len(board.history) < OPENING_PLIES:

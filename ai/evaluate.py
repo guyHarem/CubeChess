@@ -1,61 +1,123 @@
 """
 Scoring a position for the computer player, in hundredths of a pawn.
 
-The cheap part (material plus a value for where each piece stands) is kept up to date by
-FastBoard on every move, so reading it costs nothing.
+The score is material plus a value for where each piece stands. FastBoard keeps it up to
+date on every move, so reading it costs nothing.
 
-The piece values are first guesses for CubeChess, set from how many squares each piece
-reaches on an empty board compared with ordinary chess (knight x2.7, bishop x2.4, rook x1.3,
-queen x1.7). They are meant to be retuned by self-play.
+Every number that goes into it is a named parameter in DEFAULT_PARAMS. Each piece on each
+square has a list of features (how many squares it reaches from there, how far it is from
+the Ground, how far a pawn has advanced...), and its value is the sum of feature x parameter.
+That makes the numbers tunable: tools/tune.py plays the computer against itself and fits
+the parameters to who won.
 """
 from ai.tables import PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING, BLACK
 
-VALUES = {PAWN: 100, KNIGHT: 480, BISHOP: 500, ROOK: 540, QUEEN: 1150, KING: 0}
+# Tuned by self-play (tools/tune.py). The starting guesses came from how many squares each
+# piece reaches on an empty board compared with ordinary chess; FIRST_GUESSES keeps them.
+DEFAULT_PARAMS = {
+    # What a piece is worth (the pawn is the fixed yardstick)
+    "pawn": 100, "knight": 447, "bishop": 477, "rook": 476, "queen": 1168,
+    # ... plus this much for each square it could reach, above its average. (A rook reaches
+    # the same number of squares from everywhere, so it has no such term.)
+    "reach_knight": 4.84, "reach_bishop": 0.97, "reach_queen": -0.14,
+    # ... plus this much for each layer it stands away from the Ground
+    "layer_knight": -5.36, "layer_bishop": -13.45, "layer_rook": -29.0, "layer_queen": 0.24,
+    # A pawn that has advanced 1, 2, ... ranks (5 = one step from promotion on the full board)
+    "pawn_advance_1": -3.74, "pawn_advance_2": 2.7, "pawn_advance_3": 65, "pawn_advance_4": 158, "pawn_advance_5": 164,
+    "pawn_central": 3.34,    # scales the bonus for central pawns stepping forward
+    "pawn_layer": 3.62,      # per layer away from the Ground, until the pawn is far advanced
+    # King: per rank it has left its back rank (up to 4), and per layer away from the Ground
+    "king_rank": -19.0, "king_layer": -9.28,
+}
+FIRST_GUESSES = {
+    "pawn": 100, "knight": 480, "bishop": 500, "rook": 540, "queen": 1150,
+    "reach_knight": 2.0, "reach_bishop": 1.5, "reach_queen": 0.5,
+    "layer_knight": 0.0, "layer_bishop": 0.0, "layer_rook": 0.0, "layer_queen": 0.0,
+    "pawn_advance_1": 2, "pawn_advance_2": 5, "pawn_advance_3": 10, "pawn_advance_4": 22, "pawn_advance_5": 45,
+    "pawn_central": 1.0, "pawn_layer": -3.0,
+    "king_rank": -12.0, "king_layer": 0.0,
+}
+FIXED_PARAMS = ("pawn",)     # never tuned: everything else is measured against it
+PARAM_NAMES = tuple(DEFAULT_PARAMS)
 
-# Hundredths of a pawn for each extra square the piece could reach from where it stands
-MOBILITY_WEIGHT = {KNIGHT: 2.0, BISHOP: 1.5, ROOK: 1.0, QUEEN: 0.5}
-
-# For a pawn that has advanced 0, 1, 2... ranks
-ADVANCE_BONUS = (0, 2, 5, 10, 22, 45)
+NAME_OF_PIECE = {PAWN: "pawn", KNIGHT: "knight", BISHOP: "bishop", ROOK: "rook", QUEEN: "queen"}
+VALUES = {piece: DEFAULT_PARAMS[name] for piece, name in NAME_OF_PIECE.items()}
+VALUES[KING] = 0
 
 MATE = 100_000       # scores at or beyond MATE - 1000 mean a forced mate
 DRAW = 0
 
 
-def build_piece_square_values(tables):
-    """pst[piece code][square]: what the piece is worth on that square. White's values are
-    positive and Black's negative, so the sum over the board is White's lead."""
+def piece_features(tables):
+    """features[piece][square] = {parameter name: amount} for a WHITE piece on that square.
+    Built once per board size."""
+    if getattr(tables, "features", None) is not None:
+        return tables.features
     size, n = tables.size, tables.n
-    white = [[0] * n for _ in range(8)]
+    features = {piece: [dict() for _ in range(n)] for piece in (PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING)}
 
-    for piece, weight in MOBILITY_WEIGHT.items():
+    for piece in (KNIGHT, BISHOP, ROOK, QUEEN):
+        name = NAME_OF_PIECE[piece]
         if piece == KNIGHT:
             reach = [len(tables.knight[square]) for square in range(n)]
         else:
             reach = [sum(len(line) for line in tables.slides[piece][square]) for square in range(n)]
         average = sum(reach) / n
-        for square in range(n):
-            white[piece][square] = VALUES[piece] + round(weight * (reach[square] - average))
+        for square, (x, y, z) in enumerate(tables.coords):
+            entry = {name: 1, f"layer_{name}": abs(z)}
+            if piece != ROOK:
+                entry[f"reach_{name}"] = reach[square] - average
+            features[piece][square] = entry
 
     middle = (size - 1) / 2
     for square, (x, y, z) in enumerate(tables.coords):
-        # Pawns: central pawns gain from stepping forward, any pawn gains a lot close to
-        # promotion, and early on a pawn is a little better staying on the Ground
         advanced = max(0, y - 1)
         central = middle - abs(x - middle)
-        white[PAWN][square] = (VALUES[PAWN] + ADVANCE_BONUS[min(advanced, 5)]
-                               + round(central * (2 + 2 * min(advanced, 3)))
-                               - (3 * abs(z) if advanced <= 3 else 0))
-        # King: safest on its own back ranks while the board is full
-        white[KING][square] = -12 * min(y, 4)
+        pawn = {"pawn": 1, "pawn_central": central * (2 + 2 * min(advanced, 3))}
+        if advanced:
+            pawn[f"pawn_advance_{min(advanced, 5)}"] = 1
+        if advanced <= 3:
+            pawn["pawn_layer"] = abs(z)
+        features[PAWN][square] = pawn
+        features[KING][square] = {"king_rank": min(y, 4), "king_layer": abs(z)}
 
+    tables.features = features
+    return features
+
+
+def build_piece_square_values(tables, params=None):
+    """pst[piece code][square]: what the piece is worth on that square. White's values are
+    positive and Black's negative, so the sum over the board is White's lead."""
+    params = params or DEFAULT_PARAMS
+    features = piece_features(tables)
+    size, n = tables.size, tables.n
     pst = [[0] * n for _ in range(16)]
-    for piece in (PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING):
+    for piece, per_square in features.items():
+        white = [round(sum(params[name] * amount for name, amount in per_square[square].items()))
+                 for square in range(n)]
         for square, (x, y, z) in enumerate(tables.coords):
-            pst[piece][square] = white[piece][square]
+            pst[piece][square] = white[square]
             # Black sees the board from the other end
-            pst[piece | BLACK][square] = -white[piece][tables.index[(x, size - 1 - y, z)]]
+            pst[piece | BLACK][square] = -white[tables.index[(x, size - 1 - y, z)]]
     return pst
+
+
+def position_features(board):
+    """{parameter name: White's amount minus Black's} for a whole position. With the
+    parameters, this gives board.score (up to rounding); the tuner works on these."""
+    tables = board.t
+    features = piece_features(tables)
+    size = tables.size
+    total = dict.fromkeys(PARAM_NAMES, 0.0)
+    for colour, sign in ((0, 1), (1, -1)):
+        for square in board.squares[colour]:
+            piece = board.cells[square] & 7
+            if colour:
+                x, y, z = tables.coords[square]
+                square = tables.index[(x, size - 1 - y, z)]
+            for name, amount in features[piece][square].items():
+                total[name] += sign * amount
+    return total
 
 
 def evaluate(board):

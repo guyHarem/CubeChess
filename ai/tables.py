@@ -112,4 +112,5 @@ class Tables:
         self.z_castle = [rng.getrandbits(64) for _ in range(n)]
         self.z_en_passant = [rng.getrandbits(64) for _ in range(n)]
 
-        self.pst = None  # piece-square values, filled in by ai.evaluate
+        self.features = None  # per piece and square, what the scoring looks at (ai.evaluate)
+        self.pst_cache = {}   # piece-square values for each set of scoring parameters
