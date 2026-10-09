@@ -150,7 +150,8 @@ occurred three times), `move_limit` (`move_limit` moves by each player, 50 by de
 no capture and no pawn move; `halfmove_clock` counts the single moves so far) or
 `insufficient_material`. A player's material is insufficient when it could never checkmate a
 bare king: a lone king, king and one knight, bishop or rook, or king and bishops on one square
-color. The rook is on that list because a king that can step to another layer always escapes it
+color. A bishop's square color counts the layer too (`x + y + z` odd or even), because a
+bishop can change layers. The rook is on that list because a king that can step to another layer always escapes it
 (`tools/check_mating_material.py` checks every position); on a flat one-layer board a rook is
 enough. The game is drawn when both players are in that state. The draw rules only apply while both kings are on the board, so
 practice positions without kings never end in a draw.

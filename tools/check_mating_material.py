@@ -84,6 +84,28 @@ def search(size=8, z_min=-2, z_max=2, rocks=True):
     return results
 
 
+def bishops_on_one_color_can_mate(size=8, z_min=-2, z_max=2, rocks=True):
+    """Could any number of bishops tied to one square color mate a bare king?
+    A bishop never attacks a square of the other color, and the king's sideways and up/down
+    neighbours are all of the other color. So each of those would have to be off the board,
+    a rock, or guarded by the attacking king. Returns the (black king, white king) placements
+    where that holds; none means such bishops can never mate."""
+    game = empty_game(size, z_min, z_max, rocks)
+    squares = free_squares(game)
+    free = set(squares)
+    king = King("white")
+    reach = {square: set(king.get_possible_moves(square, game.board.bounds)) for square in squares}
+    placements = []
+    for black_king in squares:
+        other_color = [n for n in reach[black_king] if n in free and (sum(n) - sum(black_king)) % 2 == 1]
+        for white_king in squares:
+            if white_king == black_king or white_king in reach[black_king]:
+                continue  # the kings may not stand next to each other
+            if all(n in reach[white_king] for n in other_color):
+                placements.append((black_king, white_king))
+    return placements
+
+
 def main():
     size, z_min, z_max = (int(arg) for arg in sys.argv[1:4]) if len(sys.argv) >= 4 else (8, -2, 2)
     standard = (size, z_min, z_max) == (8, -2, 2)
@@ -92,6 +114,8 @@ def main():
         for name, (examined, mates) in search(size, z_min, z_max, rocks).items():
             example = f", e.g. black king, {name.lower()}, white king = {mates[0]}" if mates else ""
             print(f"  King + {name:<6}: {len(mates):>5} checkmates in {examined} checking positions{example}")
+        boxed = bishops_on_one_color_can_mate(size, z_min, z_max, rocks)
+        print(f"  King + bishops on one square color: {'cannot mate' if not boxed else f'might mate, e.g. kings on {boxed[0]}'}")
 
 
 if __name__ == "__main__":

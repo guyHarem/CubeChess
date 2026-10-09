@@ -724,7 +724,8 @@ class GameState:
     
     def has_insufficient_material(self, color):
         """Check if this player's pieces could never checkmate a bare king: a lone king,
-        king + one knight, bishop or rook, or king + bishops that all stand on one square color.
+        king + one knight, bishop or rook, or king + bishops that all stand on one square color
+        (counting the layer: see Bishop.get_square_color).
         A rook is enough only on a flat one-layer board; with more layers the king always has
         a way out up or down (tools/check_mating_material.py checks every position)."""
         material = self._get_material_count(color)

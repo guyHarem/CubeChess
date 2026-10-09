@@ -536,7 +536,7 @@ class FastBoard:
         if bishops == total:
             bishop = base | BISHOP
             coords = self.t.coords
-            shades = {(coords[square][0] + coords[square][1]) % 2
+            shades = {sum(coords[square]) % 2
                       for square in self.squares[colour] if self.cells[square] == bishop}
             return len(shades) == 1
         return False

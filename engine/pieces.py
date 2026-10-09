@@ -60,8 +60,9 @@ class Bishop(Piece):
         super().__init__(color)
     
     def get_square_color(self, coord):
-        """Get the square color this bishop is on given a coordinate (0=light, 1=dark)"""
-        return (coord[X] + coord[Y]) % 2
+        """The color of square this bishop is tied to (0 or 1). Every bishop move changes two
+        coordinates by the same amount, so x + y + z keeps its parity: the layer counts too."""
+        return (coord[X] + coord[Y] + coord[Z]) % 2
     
     def __str__(self):
         return f"Bishop({self.color})"

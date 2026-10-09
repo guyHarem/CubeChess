@@ -350,6 +350,23 @@ class TestDraw(unittest.TestCase):
                              (0, 0, 0): Bishop("white"), (1, 0, 0): Bishop("white")})
         self.assertFalse(mixed.has_insufficient_material("white"))
 
+    def test_a_bishops_square_color_depends_on_its_layer(self):
+        # One step sideways and one layer up is a bishop move, so those two squares share a color
+        same = custom_game({(4, 0, 0): King("white"), (4, 7, 0): King("black"),
+                            (0, 0, 0): Bishop("white"), (1, 0, 1): Bishop("white")})
+        self.assertIn((1, 0, 1), Bishop("white").get_possible_moves((0, 0, 0)))
+        self.assertTrue(same.has_insufficient_material("white"))
+        # The square straight above is the other color
+        mixed = custom_game({(4, 0, 0): King("white"), (4, 7, 0): King("black"),
+                             (0, 0, 0): Bishop("white"), (0, 0, 1): Bishop("white")})
+        self.assertFalse(mixed.has_insufficient_material("white"))
+
+    def test_a_bishop_never_leaves_its_square_color(self):
+        bishop = Bishop("white")
+        for start in ((0, 0, 0), (3, 4, -2), (7, 2, 1)):
+            for target in bishop.get_possible_moves(start):
+                self.assertEqual(bishop.get_square_color(target), bishop.get_square_color(start))
+
     def test_no_draw_while_a_pawn_waits_for_promotion(self):
         # White's king is walled in by rocks, so until the pawn is promoted White has no move at all
         pieces = {(0, 0, -2): King("white"), (7, 7, 2): King("black"), (5, 6, 0): moved(Pawn("white"))}
