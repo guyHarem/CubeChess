@@ -319,10 +319,28 @@ class TestDraw(unittest.TestCase):
 
     def test_insufficient_material_is_judged_for_each_player(self):
         game = custom_game({(4, 0, 0): King("white"), (4, 7, 0): King("black"),
-                            (0, 0, 0): Rook("white"), (1, 7, 0): Knight("black")})
+                            (0, 0, 0): Queen("white"), (1, 7, 0): Knight("black")})
         self.assertFalse(game.has_insufficient_material("white"))
         self.assertTrue(game.has_insufficient_material("black"))
         self.assertFalse(game.is_insufficient_material())
+
+    def test_a_lone_rook_cannot_mate_where_the_king_can_change_layer(self):
+        game = custom_game({(4, 0, 0): King("white"), (4, 7, 0): King("black"), (0, 0, 0): Rook("white")})
+        self.assertTrue(game.has_insufficient_material("white"))
+        self.assertEqual(game.get_draw_reason(), "insufficient_material")
+        two_rooks = custom_game({(4, 0, 0): King("white"), (4, 7, 0): King("black"),
+                                 (0, 0, 0): Rook("white"), (7, 0, 0): Rook("white")})
+        self.assertFalse(two_rooks.has_insufficient_material("white"))
+
+    def test_a_lone_rook_is_enough_on_a_flat_board(self):
+        game = GameState(size=5, z_min=0, z_max=0)
+        for coord, piece in {(0, 4, 0): King("black"), (0, 2, 0): King("white"), (4, 3, 0): Rook("white")}.items():
+            game.board.set_piece(piece, coord)
+        game.reset_tracking()
+        self.assertFalse(game.has_insufficient_material("white"))
+        self.assertIsNone(game.get_draw_reason())
+        game.make_move((4, 3, 0), (4, 4, 0))
+        self.assertTrue(game.is_checkmate("black"))
 
     def test_bishops_on_one_square_color_cannot_mate(self):
         same = custom_game({(4, 0, 0): King("white"), (4, 7, 0): King("black"),
@@ -521,7 +539,7 @@ class TestMoveLimit(unittest.TestCase):
 
     def test_draw_when_limit_reached(self):
         game = custom_game({(4, 0, 0): moved(King("white")), (4, 7, 0): moved(King("black")),
-                            (0, 0, 0): moved(Rook("white"))})
+                            (1, 0, 0): Queen("white")})
         game.move_limit = 3
         # Walk both kings sideways so no position repeats
         for x in (5, 6):

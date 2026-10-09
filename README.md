@@ -121,7 +121,11 @@ piece moved (as in `Nbd2`).
 **Draws:** `draw_reason` is `null` or one of `stalemate`, `repetition` (the same position
 occurred three times), `move_limit` (`move_limit` moves by each player, 50 by default, with
 no capture and no pawn move; `halfmove_clock` counts the single moves so far) or
-`insufficient_material`. The draw rules only apply while both kings are on the board, so
+`insufficient_material`. A player's material is insufficient when it could never checkmate a
+bare king: a lone king, king and one knight, bishop or rook, or king and bishops on one square
+color. The rook is on that list because a king that can step to another layer always escapes it
+(`tools/check_mating_material.py` checks every position); on a flat one-layer board a rook is
+enough. The game is drawn when both players are in that state. The draw rules only apply while both kings are on the board, so
 practice positions without kings never end in a draw.
 
 **Game over:** once the game has ended (checkmate, any draw, resignation, agreement or
@@ -135,8 +139,7 @@ lessons. Every endpoint works on `main` unless the request adds `?game=practice`
 `{"initial", "increment", "white", "black", "running"}` in seconds. A player's clock runs only
 on their turn and starts after White's first move; `increment` is added after each timed move.
 When the player to move runs out, `status` becomes `timeout` and the opponent is the `winner`.
-If that opponent could never checkmate (a lone king, king and one knight or bishop, or king and
-bishops on one square color), the game is drawn instead: `winner` is `null` and `draw_reason`
+If that opponent could never checkmate (see below), the game is drawn instead: `winner` is `null` and `draw_reason`
 is `timeout_insufficient_material`.
 Undo puts the clocks back to where they were before that turn.
 

@@ -1,6 +1,6 @@
 import unittest
 from api.app import app, game_manager
-from engine.pieces import King, Rook
+from engine.pieces import King, Queen, Rook
 
 
 class FakeTime:
@@ -302,10 +302,10 @@ class TestClockAndResults(unittest.TestCase):
         game_manager.game.reset_tracking()
 
     def test_timeout_against_a_bare_king_is_a_draw(self):
-        self.timed_position({(4, 0, 0): King("white"), (0, 0, 0): Rook("white"), (4, 7, 0): King("black")})
+        self.timed_position({(4, 0, 0): King("white"), (0, 0, 0): Queen("white"), (4, 7, 0): King("black")})
         self.move([0, 0, 0], [0, 1, 0])
         self.move([4, 7, 0], [4, 6, 0])
-        self.time.tick(31)   # White, who has the rook, runs out; Black could never mate
+        self.time.tick(31)   # White, who has the queen, runs out; Black could never mate
         data = self.state()
         self.assertEqual((data["status"], data["winner"], data["draw_reason"]),
                          ("timeout", None, "timeout_insufficient_material"))
@@ -314,11 +314,21 @@ class TestClockAndResults(unittest.TestCase):
         self.assertEqual(self.move([0, 1, 0], [0, 2, 0]).get_json()["error"], "The game is over")
 
     def test_timeout_still_loses_to_a_player_who_can_mate(self):
-        self.timed_position({(4, 0, 0): King("white"), (0, 0, 0): Rook("white"), (4, 7, 0): King("black")})
+        self.timed_position({(4, 0, 0): King("white"), (0, 0, 0): Queen("white"), (4, 7, 0): King("black")})
         self.move([0, 0, 0], [0, 1, 0])
         self.time.tick(31)   # Black, with the bare king, runs out
         data = self.state()
         self.assertEqual((data["status"], data["winner"], data["draw_reason"]), ("timeout", "white", None))
+
+    def test_timeout_against_a_lone_rook_is_a_draw(self):
+        self.timed_position({(4, 0, 0): King("white"), (0, 0, 0): Queen("white"),
+                             (4, 7, 0): King("black"), (0, 7, 0): Rook("black")})
+        self.move([0, 0, 0], [1, 0, 0])
+        self.move([0, 7, 0], [0, 6, 0])
+        self.time.tick(31)   # White runs out; a rook alone can never mate on a board with layers
+        data = self.state()
+        self.assertEqual((data["status"], data["winner"], data["draw_reason"]),
+                         ("timeout", None, "timeout_insufficient_material"))
 
     def test_undo_puts_the_time_back(self):
         self.new(clock={"initial": 100, "increment": 0})
