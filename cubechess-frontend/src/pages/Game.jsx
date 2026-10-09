@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Clock from '../components/Clock.jsx'
 import CubeBoard from '../components/CubeBoard.jsx'
 import Dialog from '../components/Dialog.jsx'
@@ -7,7 +7,7 @@ import Logo from '../components/Logo.jsx'
 import MoveList from '../components/MoveList.jsx'
 import PlayerCard from '../components/PlayerCard.jsx'
 import { FULL_BOARD, LAYERS, capturedBy, capturedPoints, keyOf, layerOf, layersOf, otherColor, parsePiece } from '../lib/chess.js'
-import { clockRequest, loadSettings } from '../lib/settings.js'
+import { clockRequest, computerRequest, levelName, loadSettings } from '../lib/settings.js'
 import { useGame } from '../lib/useGame.js'
 
 const NAMES = { white: 'White', black: 'Black' }
@@ -16,21 +16,29 @@ const PROMOTIONS = ['Queen', 'Rook', 'Bishop', 'Knight']
 // How the game ended, as a headline and one line of detail. null while it is still going.
 function outcomeOf(game) {
   if (!game) return null
-  const wins = game.winner ? `${NAMES[game.winner]} wins` : 'Draw'
+  const computer = game.computer?.color
+  // "White", or against the computer "You" / "The computer", with the verb form that goes with it
+  const who = (color) => (!computer ? NAMES[color] : color === computer ? 'The computer' : 'You')
+  const has = (color) => (computer && color !== computer ? 'have' : 'has')
+  const is = (color) => (computer && color !== computer ? 'are' : 'is')
+  const wins = !game.winner ? 'Draw' : !computer ? `${NAMES[game.winner]} wins` : game.winner === computer ? 'The computer wins' : 'You win'
   if (game.status === 'checkmate') return { title: wins, detail: 'Checkmate.' }
-  if (game.status === 'resigned') return { title: wins, detail: `${NAMES[otherColor(game.winner)]} resigned.` }
+  if (game.status === 'resigned') return { title: wins, detail: `${who(otherColor(game.winner))} resigned.` }
   if (game.status === 'timeout') {
-    if (game.winner) return { title: wins, detail: `${NAMES[otherColor(game.winner)]} ran out of time.` }
+    if (game.winner) return { title: wins, detail: `${who(otherColor(game.winner))} ran out of time.` }
     // The clock only runs for the player to move, so that is who ran out
     const late = game.current_player
     return {
       title: 'Draw',
-      detail: `${NAMES[late]} ran out of time, but ${NAMES[otherColor(late)]} has too few pieces to checkmate.`,
+      detail: `${who(late)} ran out of time, but ${who(otherColor(late)).replace('The', 'the').replace('You', 'you')} ${has(otherColor(late))} too few pieces to checkmate.`,
     }
   }
-  if (game.status === 'agreed_draw') return { title: 'Draw', detail: 'Both players agreed to a draw.' }
+  if (game.status === 'agreed_draw') {
+    return { title: 'Draw', detail: computer ? 'The computer accepted your draw offer.' : 'Both players agreed to a draw.' }
+  }
+  const stuck = game.current_player
   const reasons = {
-    stalemate: `${NAMES[game.current_player]} has no legal move and is not in check.`,
+    stalemate: `${who(stuck)} ${has(stuck)} no legal move and ${is(stuck)} not in check.`,
     repetition: 'The same position came up three times.',
     move_limit: `Both players made ${game.move_limit} moves with no capture and no pawn move.`,
     insufficient_material: 'Neither side has enough pieces left to checkmate.',
@@ -39,7 +47,8 @@ function outcomeOf(game) {
 }
 
 export default function Game() {
-  const { game, selected, legalMoves, error, clickCell, newGame, undo, promote, resign, agreeDraw, refresh } = useGame()
+  const { game, selected, legalMoves, error, clickCell, newGame, undo, promote, resign, agreeDraw, refresh, computerMove } =
+    useGame()
   const [settings] = useState(loadSettings)
   const [side, setSide] = useState(settings.side)
   const [activeLayer, setActiveLayer] = useState(0)
@@ -48,11 +57,20 @@ export default function Game() {
   const [command, setCommand] = useState(null)
   const [asking, setAsking] = useState(null) // 'resign' | 'draw'
   const [resultSeen, setResultSeen] = useState(false)
+  const [declined, setDeclined] = useState(null) // number of moves played when the computer said no to a draw
+  const [attempt, setAttempt] = useState(0)
+  const waiting = useRef(false)
 
   const board = game?.board ?? {}
   const history = game?.move_history ?? []
   const player = game?.current_player ?? 'white'
   const outcome = outcomeOf(game)
+  const computer = game?.computer ?? null
+  const human = computer ? otherColor(computer.color) : null
+  const computerTurn = !!computer && !outcome && player === computer.color && !game.pending_promotion
+  // The move just played, for the marker on the board (a promotion is recorded after its pawn move)
+  const lastEntry = [...history].reverse().find((entry) => entry.special_move !== 'promotion')
+  const lastMove = lastEntry ? { from: lastEntry.from, to: lastEntry.to } : null
   const captured = capturedBy(history)
   const points = capturedPoints(captured)
   const size = game?.board_size?.size ?? FULL_BOARD.size
@@ -62,8 +80,28 @@ export default function Game() {
 
   const send = (type, direction) => setCommand({ id: Date.now(), type, direction })
 
+  // On the computer's turn, ask the server for its move. The short wait lets your own move
+  // be seen first. One request at a time; when it comes back the effect runs again, which
+  // covers a move thrown away because the game changed while the computer was thinking.
+  useEffect(() => {
+    if (!computerTurn || waiting.current) return undefined
+    const timer = setTimeout(async () => {
+      waiting.current = true
+      const data = await computerMove()
+      waiting.current = false
+      if (data?.success) {
+        const played = [...data.move_history].reverse().find((entry) => entry.special_move !== 'promotion')
+        if (played) setActiveLayer(played.to[2]) // bring the layer it moved to forward
+        setAttempt((count) => count + 1)
+      } else {
+        setTimeout(() => setAttempt((count) => count + 1), data ? 300 : 3000)
+      }
+    }, 450)
+    return () => clearTimeout(timer)
+  }, [computerTurn, history.length, attempt, computerMove])
+
   function onCellClick(coord) {
-    if (outcome) return
+    if (outcome || computerTurn) return
     // Picking up a piece on another layer brings that layer forward
     const piece = parsePiece(board[keyOf(coord)])
     const isTarget = legalMoves.some((move) => keyOf(move) === keyOf(coord))
@@ -74,7 +112,18 @@ export default function Game() {
   function restart() {
     setResultSeen(false)
     setAsking(null)
-    newGame({ rocks: settings.rocks, move_limit: settings.moveLimit, clock: clockRequest(settings.clock) })
+    newGame({
+      rocks: settings.rocks,
+      move_limit: settings.moveLimit,
+      clock: clockRequest(settings.clock),
+      computer: computerRequest(settings),
+    })
+  }
+
+  async function offerDraw() {
+    setAsking(null)
+    const data = await agreeDraw()
+    if (data?.draw_declined) setDeclined(data.move_history.length)
   }
 
   function takeBack() {
@@ -82,12 +131,23 @@ export default function Game() {
     undo()
   }
 
+  const nameOf = (color) => {
+    if (!computer) return color === 'white' ? 'Player 1' : 'Player 2'
+    return color === computer.color ? `Computer, ${levelName(computer.level)}` : 'You'
+  }
+  const noteOf = (color) => {
+    if (outcome || player !== color) return undefined
+    if (color === computer?.color) return 'Thinking'
+    return game?.status === 'check' ? 'Your move, in check' : undefined
+  }
+  const turnText = !computer ? `${NAMES[player]} to move` : computerTurn ? 'The computer is thinking' : 'Your move'
+
   const card = (color) => (
     <PlayerCard
       color={color}
-      name={color === 'white' ? 'Player 1' : 'Player 2'}
+      name={nameOf(color)}
       toMove={!outcome && player === color}
-      note={!outcome && player === color && game?.status === 'check' ? 'Your move, in check' : undefined}
+      note={noteOf(color)}
       points={points[color]}
       lead={points[color] - points[otherColor(color)]}
       captured={captured[color]}
@@ -101,7 +161,7 @@ export default function Game() {
         <Logo />
         <div className={`turn turn-${outcome ? 'over' : player}`} aria-live="polite">
           {!outcome && <i className={`chip chip-${player}`} />}
-          {outcome ? outcome.title : `${NAMES[player]} to move`}
+          {outcome ? outcome.title : turnText}
           {!outcome && game?.status === 'check' && <span className="turn-check">Check</span>}
         </div>
         <div className="bar-actions">
@@ -137,6 +197,7 @@ export default function Game() {
               {quiet} of {game?.move_limit ?? settings.moveLimit} quiet moves. The game is drawn at the limit, when
               nobody captures or moves a pawn.
             </p>
+            {declined === history.length && !outcome && <p className="banner-note">The computer declines the draw.</p>}
             {error && <p className="banner-error">{error}</p>}
           </div>
 
@@ -168,6 +229,7 @@ export default function Game() {
               activeLayer={shownLayer}
               selected={selected}
               legalMoves={legalMoves}
+              lastMove={lastMove}
               showMoveBalls={settings.showLegalMoves}
               spread={spread}
               solo={solo}
@@ -176,7 +238,7 @@ export default function Game() {
               onCellClick={onCellClick}
             />
 
-            {game?.pending_promotion && (
+            {game?.pending_promotion && player !== computer?.color && (
               <Dialog
                 title="Promote your pawn"
                 actions={PROMOTIONS.map((type) => (
@@ -191,14 +253,14 @@ export default function Game() {
 
             {asking === 'resign' && (
               <Dialog
-                title={`${NAMES[player]}, resign this game?`}
+                title={computer ? 'Resign this game?' : `${NAMES[player]}, resign this game?`}
                 actions={
                   <>
                     <button
                       type="button"
                       className="button button-danger"
                       onClick={() => {
-                        resign(player)
+                        resign(human ?? player)
                         setAsking(null)
                       }}
                     >
@@ -210,23 +272,16 @@ export default function Game() {
                   </>
                 }
               >
-                <p>{NAMES[otherColor(player)]} will win.</p>
+                <p>{computer ? 'The computer will win.' : `${NAMES[otherColor(player)]} will win.`}</p>
               </Dialog>
             )}
 
-            {asking === 'draw' && (
+            {asking === 'draw' && !computer && (
               <Dialog
                 title={`${NAMES[player]} offers a draw`}
                 actions={
                   <>
-                    <button
-                      type="button"
-                      className="button button-primary"
-                      onClick={() => {
-                        agreeDraw()
-                        setAsking(null)
-                      }}
-                    >
+                    <button type="button" className="button button-primary" onClick={offerDraw}>
                       Accept draw
                     </button>
                     <button type="button" className="button" onClick={() => setAsking(null)}>
@@ -236,6 +291,24 @@ export default function Game() {
                 }
               >
                 <p>{NAMES[otherColor(player)]}, do you accept?</p>
+              </Dialog>
+            )}
+
+            {asking === 'draw' && computer && (
+              <Dialog
+                title="Offer the computer a draw?"
+                actions={
+                  <>
+                    <button type="button" className="button button-primary" onClick={offerDraw}>
+                      Offer draw
+                    </button>
+                    <button type="button" className="button" onClick={() => setAsking(null)}>
+                      Keep playing
+                    </button>
+                  </>
+                }
+              >
+                <p>It accepts when it thinks it is worse, or when a long game is level.</p>
               </Dialog>
             )}
 
@@ -287,6 +360,7 @@ export default function Game() {
               side={side}
               selected={selected}
               legalMoves={legalMoves}
+              lastMove={lastMove}
               showMoves={settings.showLegalMoves}
               onCellClick={onCellClick}
             />

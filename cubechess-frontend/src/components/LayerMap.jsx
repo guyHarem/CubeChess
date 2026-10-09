@@ -5,7 +5,7 @@ import PieceIcon from './PieceIcon.jsx'
 
 const FILES = 'abcdefgh'
 
-export default function LayerMap({ board, size, z, side, selected, legalMoves, goal, showMoves = true, onCellClick }) {
+export default function LayerMap({ board, size, z, side, selected, legalMoves, goal, lastMove, showMoves = true, onCellClick }) {
   const layer = layerOf(z)
   const range = [...Array(size).keys()]
   // White at the bottom when white sits nearest, otherwise the view is turned round
@@ -23,6 +23,8 @@ export default function LayerMap({ board, size, z, side, selected, legalMoves, g
           if (sameCoord(selected, coord)) classes.push('is-selected')
           if (legal && piece) classes.push('is-capture')
           if (sameCoord(goal, coord)) classes.push('is-goal')
+          if (sameCoord(lastMove?.from, coord)) classes.push('is-left')
+          if (sameCoord(lastMove?.to, coord)) classes.push('is-arrived')
           return (
             <button
               key={`${x}-${y}`}

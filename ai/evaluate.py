@@ -15,6 +15,9 @@ VALUES = {PAWN: 100, KNIGHT: 480, BISHOP: 500, ROOK: 540, QUEEN: 1150, KING: 0}
 # Hundredths of a pawn for each extra square the piece could reach from where it stands
 MOBILITY_WEIGHT = {KNIGHT: 2.0, BISHOP: 1.5, ROOK: 1.0, QUEEN: 0.5}
 
+# For a pawn that has advanced 0, 1, 2... ranks
+ADVANCE_BONUS = (0, 2, 5, 10, 22, 45)
+
 MATE = 100_000       # scores at or beyond MATE - 1000 mean a forced mate
 DRAW = 0
 
@@ -36,9 +39,13 @@ def build_piece_square_values(tables):
 
     middle = (size - 1) / 2
     for square, (x, y, z) in enumerate(tables.coords):
-        # Pawns: worth more the further they have advanced, and a little more on central files
+        # Pawns: central pawns gain from stepping forward, any pawn gains a lot close to
+        # promotion, and early on a pawn is a little better staying on the Ground
         advanced = max(0, y - 1)
-        white[PAWN][square] = VALUES[PAWN] + 4 * advanced + advanced * advanced + round(2 * (middle - abs(x - middle)))
+        central = middle - abs(x - middle)
+        white[PAWN][square] = (VALUES[PAWN] + ADVANCE_BONUS[min(advanced, 5)]
+                               + round(central * (2 + 2 * min(advanced, 3)))
+                               - (3 * abs(z) if advanced <= 3 else 0))
         # King: safest on its own back ranks while the board is full
         white[KING][square] = -12 * min(y, 4)
 

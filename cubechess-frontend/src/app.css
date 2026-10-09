@@ -132,6 +132,14 @@
   border: 1px solid #c9d0dc;
 }
 
+.banner-note {
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-control);
+  background: var(--raised);
+  font-size: 14px;
+}
+
 .banner-error {
   padding: 10px 14px;
   border: 1px solid #7a2a2a;
@@ -339,6 +347,12 @@ legend {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.setup-pair {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px 48px;
 }
 
 .choices-3 {
@@ -806,6 +820,16 @@ legend {
 
 .map-cell:focus-visible {
   outline-offset: -3px;
+}
+
+/* The last move: where the piece left, and (stronger) where it arrived */
+.map-cell.is-left {
+  background-image: linear-gradient(rgba(255, 255, 255, 0.38), rgba(255, 255, 255, 0.38));
+}
+
+.map-cell.is-arrived {
+  background-image: linear-gradient(rgba(255, 255, 255, 0.62), rgba(255, 255, 255, 0.62));
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.95);
 }
 
 .map-cell.is-selected {

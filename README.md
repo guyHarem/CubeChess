@@ -13,6 +13,8 @@ A 3D chess variant on a 5-layer cube board. This is a **work in progress (WIP)**
   - Draw detection (stalemate, threefold repetition, 50-move limit, insufficient material)
   - Any board size from 4×4 to 8×8 with 1 to 5 layers
   
+- ✅ **Computer player** (`ai/`) — three levels, see "Computer opponent" below
+
 - ✅ **Flask API** (`api/`) — RESTful backend
   - GameManager wrapper layer
   - 6 API endpoints for game management
@@ -25,7 +27,8 @@ A 3D chess variant on a 5-layer cube board. This is a **work in progress (WIP)**
 - ✅ Move list, captured material, chess clock with increment, undo, resign and draw by agreement
 - ✅ Lesson player: nine lessons on a 5×5 three-layer board (`cubechess-frontend/src/lessons.json`)
 - ✅ Scenario player: 30 checkmate puzzles in four tiers (`cubechess-frontend/src/scenarios.json`)
-- ⏳ Computer opponent, online play
+- ✅ Play against the computer (easy, medium, hard), with the last move marked on the board
+- ⏳ Online play
 - 🔧 Developer test bench at `#/bench` for checking backend behavior
 
 ### Phase 3: Polish & Deployment (Not Started)
@@ -77,6 +80,29 @@ npm run dev
 # App runs on http://localhost:5173 (Vite picks the next free port if that one is taken)
 ```
 
+### Computer opponent
+
+The computer is not trained; it plays like a classic chess program (`ai/`):
+
+1. It copies the position onto a compact board (`ai/board.py`) that lists moves about a
+   thousand times faster than the rules engine. `tests/test_fast_board.py` holds the two to
+   the same rules move for move.
+2. It looks ahead: its moves, your replies, its answers (`ai/search.py`, alpha-beta search).
+   Lines that are already worse than one it has found are dropped, and at the end of a line
+   it follows captures until the position is quiet.
+3. It scores the positions it reaches by material and placement (`ai/evaluate.py`). The piece
+   values are first guesses for 3D (pawn 1, knight 4.8, bishop 5, rook 5.4, queen 11.5).
+
+| Level | Looks ahead | Picks |
+|---|---|---|
+| Easy | 1 move | at random among moves within 1.5 pawns of the best |
+| Medium | 2 moves, following captures | at random among moves within 0.3 pawns |
+| Hard | as deep as 3 seconds allow (usually 4 to 5 moves) | the best move |
+
+`python tools/play_match.py` plays the levels against each other (hard beat medium 40-0 and
+medium beat easy 20-0), and is the way to check that a change makes the computer stronger.
+The server does the thinking in a worker process (`api/thinker.py`).
+
 The scenarios are generated, not hand-written: `python tools/generate_scenarios.py` searches
 random positions for ones where White has exactly one way to force mate, and rewrites
 `scenarios.json`. `tests/test_scenarios.py` re-checks every puzzle against the engine.
@@ -97,10 +123,11 @@ The test bench edits positions through sandbox endpoints that are for testing on
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/api/game/new` | POST | Start new game. Optional body: `{"rocks": true, "move_limit": 50, "clock": {"initial": 600, "increment": 5}}` |
+| `/api/game/new` | POST | Start new game. Optional body: `{"rocks": true, "move_limit": 50, "clock": {"initial": 600, "increment": 5}, "computer": {"color": "black", "level": "hard"}}` |
 | `/api/game/state` | GET | Get current board state |
 | `/api/game/move` | POST | Execute a move |
 | `/api/game/legal-moves` | GET | Get legal moves for piece |
+| `/api/game/computer-move` | POST | The computer thinks and plays (only on its turn) |
 | `/api/game/promote` | POST | Promote pawn |
 | `/api/game/undo` | POST | Undo last move (also reopens a game ended by resignation, agreement or timeout) |
 | `/api/game/resign` | POST | Resign. Optional body: `{"color": "white"}`; default is the player to move |
@@ -131,6 +158,15 @@ practice positions without kings never end in a draw.
 **Game over:** once the game has ended (checkmate, any draw, resignation, agreement or
 timeout), moving, promoting, resigning and offering a draw are refused with
 `"The game is over"`, and `legal-moves` returns an empty list. Undo reopens the game.
+
+**Computer:** `computer` is `null` for two human players, otherwise `{"color", "level"}` with
+level `easy`, `medium` or `hard`. The page calls `computer-move` when it is the computer's
+turn; the answer is the game after its move plus `thought` (`score`, `depth`, `nodes`,
+`seconds`, `mate_in`). `/move` refuses moves for the computer's side. If the game changes
+while the computer thinks (undo, new game), its move is dropped and the call fails with
+`"The position changed while the computer was thinking"`. Undo takes back the computer's
+reply together with your move. `/draw` is an offer the computer may refuse: the call then
+fails with `draw_declined: true`. `/resign` without a color is the human's resignation.
 
 **Two games:** the server keeps a `main` game and a separate `practice` game used by the
 lessons. Every endpoint works on `main` unless the request adds `?game=practice`.
@@ -163,9 +199,17 @@ CubeChess/
 │   ├── pieces.py          # Piece classes & movement rules
 │   ├── board.py           # Board storage & operations
 │   └── game_state.py      # Game logic & validation
+├── ai/                    # Computer player
+│   ├── tables.py         # Move tables for a board size
+│   ├── board.py          # FastBoard: the compact board it thinks on
+│   ├── evaluate.py       # Scoring a position
+│   ├── search.py         # Looking ahead (alpha-beta)
+│   └── levels.py         # Easy, medium, hard
 ├── api/                   # Flask backend
 │   ├── app.py            # HTTP routes
 │   ├── game_manager.py   # Business logic wrapper
+│   ├── clock.py          # Chess clock
+│   ├── thinker.py        # Runs the computer's thinking in a worker process
 │   └── utils.py          # JSON serialization
 ├── cubechess-frontend/    # React + Vite + Three.js frontend
 │   ├── src/
@@ -175,6 +219,7 @@ CubeChess/
 │   │   ├── bench/        # Developer test bench
 │   │   └── pieces3d.js   # Procedural 3D piece models
 │   └── dev/              # Sprite renderer used for the design artboards
+├── tools/                # Scenario generator, level matches, mating-material check
 ├── tests/                # Test suite
 └── IMPLEMENTATION_GUIDE.md # Original planning notes
 ```

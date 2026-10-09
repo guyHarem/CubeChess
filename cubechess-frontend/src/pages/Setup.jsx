@@ -4,7 +4,7 @@ import Logo from '../components/Logo.jsx'
 import { api } from '../lib/api.js'
 import { START_BOARD } from '../lib/chess.js'
 import { navigate } from '../lib/router.js'
-import { CLOCK_PRESETS, clockRequest, loadSettings, saveSettings } from '../lib/settings.js'
+import { CLOCK_PRESETS, LEVELS, clockRequest, computerRequest, levelName, loadSettings, saveSettings } from '../lib/settings.js'
 
 function Choice({ selected, disabled, onClick, title, hint, children }) {
   return (
@@ -55,6 +55,7 @@ export default function Setup() {
         ? `${clock.minutes} min each${increment > 0 ? `, plus ${increment} s a move` : ''}.`
         : `${CLOCK_PRESETS.find((option) => option.mode === clock.mode).label} each.`
   const previewSide = sideChoice === 'black' ? 'black' : 'white'
+  const againstComputer = settings.opponent === 'computer'
   const previewBoard = settings.rocks
     ? START_BOARD
     : Object.fromEntries(Object.entries(START_BOARD).filter(([, value]) => value !== 'Rock'))
@@ -63,7 +64,12 @@ export default function Setup() {
     setStarting(true)
     const side = sideChoice === 'random' ? (Math.random() < 0.5 ? 'white' : 'black') : sideChoice
     try {
-      const data = await api('/game/new', { rocks: settings.rocks, move_limit: limit, clock: clockRequest(clock) })
+      const data = await api('/game/new', {
+        rocks: settings.rocks,
+        move_limit: limit,
+        clock: clockRequest(clock),
+        computer: computerRequest(settings, side),
+      })
       if (!data.success) throw new Error(data.error)
       saveSettings({ ...settings, side, moveLimit: limit })
       navigate('/game')
@@ -93,26 +99,54 @@ export default function Setup() {
           <fieldset>
             <legend>Opponent</legend>
             <div className="choices choices-3">
-              <Choice selected title="Two players" hint="Same screen, take turns" />
-              <Choice disabled title="Computer" hint="Not built yet" />
+              <Choice
+                selected={!againstComputer}
+                onClick={() => set({ opponent: 'local' })}
+                title="Two players"
+                hint="Same screen, take turns"
+              />
+              <Choice
+                selected={againstComputer}
+                onClick={() => set({ opponent: 'computer' })}
+                title="Computer"
+                hint="Pick a level below"
+              />
               <Choice disabled title="Online" hint="Not built yet" />
             </div>
           </fieldset>
 
-          <fieldset>
-            <legend>Side nearest you</legend>
-            <div className="choices">
-              <Choice selected={sideChoice === 'white'} onClick={() => setSideChoice('white')}>
-                <i className="chip chip-white" />
-                White
-              </Choice>
-              <Choice selected={sideChoice === 'black'} onClick={() => setSideChoice('black')}>
-                <i className="chip chip-black" />
-                Black
-              </Choice>
-              <Choice selected={sideChoice === 'random'} onClick={() => setSideChoice('random')} title="Random" />
-            </div>
-          </fieldset>
+          <div className="setup-pair">
+            <fieldset>
+              <legend>{againstComputer ? 'Your side' : 'Side nearest you'}</legend>
+              <div className="choices">
+                <Choice selected={sideChoice === 'white'} onClick={() => setSideChoice('white')}>
+                  <i className="chip chip-white" />
+                  White
+                </Choice>
+                <Choice selected={sideChoice === 'black'} onClick={() => setSideChoice('black')}>
+                  <i className="chip chip-black" />
+                  Black
+                </Choice>
+                <Choice selected={sideChoice === 'random'} onClick={() => setSideChoice('random')} title="Random" />
+              </div>
+            </fieldset>
+
+            {againstComputer && (
+              <fieldset>
+                <legend>Computer level</legend>
+                <div className="choices">
+                  {LEVELS.map((level) => (
+                    <Choice
+                      key={level.id}
+                      selected={settings.level === level.id}
+                      onClick={() => set({ level: level.id })}
+                      title={level.label}
+                    />
+                  ))}
+                </div>
+              </fieldset>
+            )}
+          </div>
 
           <fieldset>
             <legend>Clock</legend>
@@ -211,8 +245,16 @@ export default function Setup() {
             <CubeBoard interactive={false} board={previewBoard} side={previewSide} />
           </div>
           <p className="setup-summary">
-            <strong>Two players on this screen</strong>
-            {sideChoice === 'random' ? 'A coin flip decides which side sits nearest.' : `${previewSide === 'white' ? 'White' : 'Black'} sits nearest. White moves first.`}
+            <strong>{againstComputer ? `You against the computer, ${levelName(settings.level)}` : 'Two players on this screen'}</strong>
+            {againstComputer
+              ? `${LEVELS.find((level) => level.id === settings.level).hint}. ${
+                  sideChoice === 'random'
+                    ? 'A coin flip decides your side.'
+                    : `You play ${previewSide === 'white' ? 'White and move first' : 'Black; the computer moves first'}.`
+                }`
+              : sideChoice === 'random'
+                ? 'A coin flip decides which side sits nearest.'
+                : `${previewSide === 'white' ? 'White' : 'Black'} sits nearest. White moves first.`}
             <br />
             {clockSummary} {settings.rocks ? 'Rocks on.' : 'Rocks off.'} {settings.allowUndo ? 'Undo allowed.' : 'No undo.'}
           </p>

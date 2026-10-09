@@ -22,7 +22,8 @@ export function useGame(which = 'main') {
     try {
       const data = await api(path, body, which)
       if (data.board) setGame({ ...data, receivedAt: performance.now() })
-      setError(data.success ? null : data.error)
+      // A declined draw offer is an answer, not a fault: the page shows it its own way
+      setError(data.success || data.draw_declined ? null : data.error)
       setSelected(null)
       setLegalMoves([])
       return data
@@ -48,6 +49,19 @@ export function useGame(which = 'main') {
       setGame({ ...data, receivedAt: performance.now() })
     } catch {
       setError(OFFLINE)
+    }
+  }, [which])
+
+  // Ask the computer to think and play. A refusal still carries the current game, and is
+  // normal when the position changed while it thought (undo, new game), so it shows no error.
+  const computerMove = useCallback(async () => {
+    try {
+      const data = await api('/game/computer-move', {}, which)
+      if (data.board) setGame({ ...data, receivedAt: performance.now() })
+      return data
+    } catch {
+      setError(OFFLINE)
+      return null
     }
   }, [which])
 
@@ -85,6 +99,7 @@ export function useGame(which = 'main') {
     clearSelection,
     select,
     refresh,
+    computerMove,
     setup: (position) => call('/debug/setup', position),
     move: (from, to) => call('/game/move', { from, to }),
     resign: (color) => call('/game/resign', { color }),

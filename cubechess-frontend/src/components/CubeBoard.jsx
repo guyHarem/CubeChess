@@ -186,6 +186,16 @@ function GoalPad({ position }) {
   )
 }
 
+// The square a piece just left or arrived on: a pale tile on the cell's floor
+function MovePad({ position, arrived }) {
+  return (
+    <mesh position={[position[0], position[1] + 0.015, position[2]]} rotation={FLAT}>
+      <planeGeometry args={[0.94, 0.94]} />
+      <meshBasicMaterial color="#FFFFFF" transparent opacity={arrived ? 0.62 : 0.34} depthWrite={false} toneMapped={false} />
+    </mesh>
+  )
+}
+
 const BUILDERS = {}
 function pieceBuilder(type, color) {
   const key = `${type}-${color}`
@@ -266,6 +276,7 @@ function Scene({
   selected,
   legalMoves,
   goal,
+  lastMove,
   showMoveBalls,
   spread,
   solo,
@@ -340,6 +351,8 @@ function Scene({
         ),
       )}
 
+      {lastMove && visible(lastMove.from[2]) && <MovePad position={cellPosition(lastMove.from)} />}
+      {lastMove && visible(lastMove.to[2]) && <MovePad position={cellPosition(lastMove.to)} arrived />}
       {goal && visible(goal[2]) && <GoalPad position={cellPosition(goal)} />}
       {selected && visible(selected[2]) && <Ring position={cellPosition(selected)} color="#F5B83D" />}
       {moves.map((move) =>
@@ -369,6 +382,7 @@ export default function CubeBoard({
   selected = null,
   legalMoves = [],
   goal = null,
+  lastMove = null,
   showMoveBalls = true,
   spread = false,
   solo = false,
@@ -392,6 +406,7 @@ export default function CubeBoard({
         selected={selected}
         legalMoves={legalMoves}
         goal={goal}
+        lastMove={lastMove}
         showMoveBalls={showMoveBalls}
         spread={spread}
         solo={solo}
