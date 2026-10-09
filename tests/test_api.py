@@ -373,6 +373,186 @@ class TestClockAndResults(unittest.TestCase):
         self.assertEqual(self.new()["status"], "ongoing")
 
 
+class TestComputerOpponent(unittest.TestCase):
+    """The server side of playing against the computer. The thinking itself is replaced by
+    scripted answers here; tests/test_ai.py covers the real thing."""
+
+    def setUp(self):
+        self.client = app.test_client()
+        self.script = []     # moves the "computer" will play, in order
+        self.asked = []      # (level, seconds) of every request to think
+        game_manager._think = self.think
+
+    def tearDown(self):
+        from api.thinker import think
+        game_manager._think = think
+        self.client.post('/api/game/new')
+
+    def think(self, game, level, seconds):
+        self.asked.append((level, seconds))
+        from_coord, to_coord = self.script.pop(0)
+        return {"from": from_coord, "to": to_coord, "promotion": None,
+                "score": 12, "depth": 3, "nodes": 1000, "seconds": 0.01, "mate_in": None}
+
+    def new(self, **body):
+        return self.client.post('/api/game/new', json=body)
+
+    def move(self, from_coord, to_coord):
+        return self.client.post('/api/game/move', json={"from": from_coord, "to": to_coord})
+
+    def computer(self):
+        return self.client.post('/api/game/computer-move')
+
+    def test_two_player_games_have_no_computer(self):
+        self.assertIsNone(self.new().get_json()["computer"])
+        res = self.computer()
+        self.assertEqual((res.status_code, res.get_json()["error"]), (400, "This game has no computer player"))
+
+    def test_computer_plays_black(self):
+        data = self.new(computer={"color": "black", "level": "medium"}).get_json()
+        self.assertEqual(data["computer"], {"color": "black", "level": "medium"})
+        res = self.computer()
+        self.assertEqual((res.status_code, res.get_json()["error"]), (400, "It is not the computer's turn"))
+
+        self.move([4, 1, 0], [4, 3, 0])
+        # The human cannot move the computer's pieces
+        res = self.move([4, 6, 0], [4, 4, 0])
+        self.assertEqual((res.status_code, res.get_json()["error"]), (400, "It is the computer's turn"))
+
+        self.script = [((4, 6, 0), (4, 4, 0))]
+        data = self.computer().get_json()
+        self.assertTrue(data["success"])
+        self.assertEqual(data["board"]["[4, 4, 0]"], "Pawn(black)")
+        self.assertEqual(data["current_player"], "white")
+        self.assertEqual(data["thought"], {"score": 12, "depth": 3, "nodes": 1000, "seconds": 0.01, "mate_in": None})
+        self.assertEqual(self.asked, [("medium", None)])
+
+    def test_computer_plays_white_and_moves_first(self):
+        self.new(computer={"color": "white", "level": "easy"})
+        self.assertEqual(self.move([4, 1, 0], [4, 3, 0]).status_code, 400)
+        self.script = [((4, 1, 0), (4, 3, 0))]
+        data = self.computer().get_json()
+        self.assertEqual((data["current_player"], len(data["move_history"])), ("black", 1))
+        self.assertEqual(self.move([4, 6, 0], [4, 4, 0]).status_code, 200)
+
+    def test_undo_takes_back_the_computers_reply_too(self):
+        self.new(computer={"color": "black", "level": "easy"})
+        self.move([4, 1, 0], [4, 3, 0])
+        self.script = [((4, 6, 0), (4, 4, 0))]
+        self.computer()
+        data = self.client.post('/api/game/undo').get_json()
+        self.assertEqual((data["current_player"], data["move_history"]), ("white", []))
+        # Undoing while the computer is still to move takes back just the human's move
+        self.move([3, 1, 0], [3, 3, 0])
+        data = self.client.post('/api/game/undo').get_json()
+        self.assertEqual((data["current_player"], data["move_history"]), ("white", []))
+
+    def test_a_move_for_a_position_that_changed_is_dropped(self):
+        self.new(computer={"color": "black", "level": "hard"})
+        self.move([4, 1, 0], [4, 3, 0])
+
+        def slow_think(game, level, seconds):
+            self.client.post('/api/game/undo')   # the human takes the move back while it thinks
+            return self.think(game, level, seconds)
+
+        game_manager._think = slow_think
+        self.script = [((4, 6, 0), (4, 4, 0))]
+        res = self.computer()
+        self.assertEqual((res.status_code, res.get_json()["error"]),
+                         (400, "The position changed while the computer was thinking"))
+        self.assertEqual(res.get_json()["move_history"], [])
+
+    def test_only_one_thought_at_a_time(self):
+        self.new(computer={"color": "black", "level": "hard"})
+        self.move([4, 1, 0], [4, 3, 0])
+        seen = []
+
+        def nested_think(game, level, seconds):
+            seen.append(self.computer().get_json()["error"])   # a second request arrives meanwhile
+            return self.think(game, level, seconds)
+
+        game_manager._think = nested_think
+        self.script = [((4, 6, 0), (4, 4, 0))]
+        self.assertTrue(self.computer().get_json()["success"])
+        self.assertEqual(seen, ["The computer is already thinking"])
+
+    def test_computer_promotes(self):
+        self.new(computer={"color": "white", "level": "hard"})
+        game_manager.game.board.board = {(0, 0, 0): King("white"), (7, 7, 2): King("black")}
+        game_manager.game.board.set_piece(Queen("white"), (0, 1, 0))  # keeps the position from being a dead draw
+        from engine.pieces import Pawn
+        pawn = Pawn("white")
+        pawn.has_moved = True
+        game_manager.game.board.set_piece(pawn, (3, 6, 0))
+        game_manager.game.reset_tracking()
+
+        def think(game, level, seconds):
+            return {"from": (3, 6, 0), "to": (3, 7, 0), "promotion": "Knight",
+                    "score": 0, "depth": 1, "nodes": 1, "seconds": 0.0, "mate_in": None}
+
+        game_manager._think = think
+        data = self.computer().get_json()
+        self.assertTrue(data["success"], data.get("error"))
+        self.assertEqual((data["board"]["[3, 7, 0]"], data["pending_promotion"], data["current_player"]),
+                         ("Knight(white)", None, "black"))
+
+    def test_thinking_time_follows_the_clock(self):
+        time_source = FakeTime()
+        game_manager._now = time_source
+        try:
+            self.new(computer={"color": "black", "level": "hard"}, clock={"initial": 50, "increment": 0})
+            self.move([4, 1, 0], [4, 3, 0])
+            time_source.tick(25)   # the computer's clock has been running: 25 s left
+            self.script = [((4, 6, 0), (4, 4, 0))]
+            self.computer()
+            self.assertEqual(self.asked, [("hard", 1.0)])
+        finally:
+            import time
+            game_manager._now = time.monotonic
+
+    def test_draw_offer_is_declined_at_the_start(self):
+        self.new(computer={"color": "black", "level": "easy"})
+        res = self.client.post('/api/game/draw')
+        data = res.get_json()
+        self.assertEqual((res.status_code, data["error"], data["draw_declined"], data["status"]),
+                         (400, "The computer declines the draw", True, "ongoing"))
+
+    def test_draw_offer_is_accepted_when_the_computer_is_losing(self):
+        self.new(computer={"color": "black", "level": "easy"})
+        game_manager.game.board.board = {(4, 0, 0): King("white"), (4, 7, 0): King("black")}
+        game_manager.game.board.set_piece(Queen("white"), (3, 0, 0))
+        game_manager.game.board.set_piece(Queen("white"), (2, 0, 0))
+        game_manager.game.reset_tracking()
+        data = self.client.post('/api/game/draw').get_json()
+        self.assertEqual((data["success"], data["status"]), (True, "agreed_draw"))
+
+    def test_resigning_is_the_humans_resignation(self):
+        self.new(computer={"color": "black", "level": "easy"})
+        self.move([4, 1, 0], [4, 3, 0])   # now the computer is to move
+        data = self.client.post('/api/game/resign').get_json()
+        self.assertEqual((data["status"], data["winner"]), ("resigned", "black"))
+
+    def test_bad_computer_settings(self):
+        for computer in ({"color": "green", "level": "easy"}, {"color": "white", "level": "genius"},
+                         {"level": "easy"}, "hard", 3):
+            self.assertEqual(self.new(computer=computer).status_code, 400, computer)
+
+    def test_setting_up_a_position_ends_the_computer_game(self):
+        self.new(computer={"color": "black", "level": "easy"})
+        data = self.client.post('/api/debug/setup', json={"pieces": []}).get_json()
+        self.assertIsNone(data["computer"])
+
+    def test_the_real_computer_plays_through_the_api(self):
+        from api.thinker import think
+        game_manager._think = think
+        self.new(computer={"color": "black", "level": "medium"})
+        self.move([4, 1, 0], [4, 3, 0])
+        data = self.computer().get_json()
+        self.assertTrue(data["success"], data.get("error"))
+        self.assertEqual((data["current_player"], len(data["move_history"])), ("white", 2))
+        self.assertEqual(data["thought"]["depth"], 2)
+
+
 class TestSmallBoardApi(unittest.TestCase):
     def setUp(self):
         self.client = app.test_client()

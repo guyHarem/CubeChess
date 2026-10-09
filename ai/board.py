@@ -50,6 +50,7 @@ class FastBoard:
         self.ep = -1                       # square a pawn may capture onto en passant, or -1
         self.ep_pawn = -1                  # the pawn that capture would remove
         self.half = 0                      # single moves since the last capture or pawn move
+        self.move_limit = 50               # draw after this many quiet moves by each player
         self.score = 0                     # material and placement, White minus Black
         self.pieces_key = 0                # fingerprint of the pieces alone
         self.rights_key = 0                # ... of the castling options still open
@@ -78,6 +79,7 @@ class FastBoard:
         if target is not None:
             board.ep, board.ep_pawn = index[target[0]], index[target[1]]
         board.half = game.halfmove_clock
+        board.move_limit = game.move_limit
         board.rights_key = board._castling_key()
         board.key = board._full_key(board._en_passant_key())
         # Earlier positions matter for the repetition rule
@@ -179,6 +181,60 @@ class FastBoard:
                         return True
                     break
         return False
+
+    def _attacked_along(self, line, straight, by):
+        """Is the first piece on this line (which starts beside a king) an enemy slider facing it?"""
+        cells = self.cells
+        for square in line:
+            piece = cells[square]
+            if piece:
+                piece &= 15
+                return piece == (QUEEN | by) or piece == ((ROOK if straight else BISHOP) | by)
+        return False
+
+    def exposes_king(self, move, was_in_check):
+        """Call right after make(move): did the mover leave their own king attacked?
+        Quick when the mover was not in check: only a king move, an en passant capture or a
+        piece leaving a line it shared with the king can do that."""
+        opponent = self.side
+        king = self.kings[(opponent ^ BLACK) >> 3]
+        if king < 0:
+            return False
+        if was_in_check or (move >> 9) & SQUARE == king or move & KIND == EN_PASSANT:
+            return self.attacked(king, opponent)
+        entry = self.t.line_to[king].get(move & SQUARE)
+        return entry is not None and self._attacked_along(entry[1], entry[0], opponent)
+
+    def gives_check(self, move):
+        """Call right after make(move), once the move is known to be legal: is the player now
+        to move in check? Looks only at the moved piece and at the line it uncovered."""
+        side = self.side
+        king = self.kings[side >> 3]
+        if king < 0:
+            return False
+        by = side ^ BLACK
+        if move & KIND >= EN_PASSANT:  # en passant and castling move a second piece too
+            return self.attacked(king, by)
+        tables = self.t
+        target = (move >> 9) & SQUARE
+        lines = tables.line_to[king]
+        piece = self.cells[target] & 7
+        if piece == KNIGHT:
+            if target in tables.knight_set[king]:
+                return True
+        elif piece == PAWN:
+            if target in tables.pawn_attacker_set[by >> 3][king]:
+                return True
+        elif piece != KING:
+            entry = lines.get(target)
+            if entry is not None and (piece == QUEEN or (piece == ROOK) == entry[0]):
+                for square in entry[1]:
+                    if self.cells[square]:
+                        if square == target:
+                            return True
+                        break
+        entry = lines.get(move & SQUARE)
+        return entry is not None and self._attacked_along(entry[1], entry[0], by)
 
     def in_check(self, colour=None):
         """Is that colour's king attacked? (The player to move, unless a colour is given)"""

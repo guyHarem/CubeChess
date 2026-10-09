@@ -56,12 +56,24 @@ class FastBoardTestCase(unittest.TestCase):
                 self.assertEqual(sorted(p for x, y, p in described if (x, y) == (a, b)),
                                  ["Bishop", "Knight", "Queen", "Rook"], f"{tag}: promotion choices")
 
-        # Making and taking back any move must leave no trace
+        # Making and taking back any move must leave no trace, and the quick checks the
+        # search relies on must agree with the thorough ones
         before = state_of(board)
+        was_in_check = board.in_check()
+        mover = board.side
         for move in board.pseudo_moves():
             board.make(move)
+            exposed = board.in_check(mover)
+            self.assertEqual(board.exposes_king(move, was_in_check), exposed, f"{tag}: exposes_king {board.describe(move)}")
+            self.assertEqual(move in moves, not exposed, f"{tag}: legality of {board.describe(move)}")
+            if not exposed:
+                self.assertEqual(board.gives_check(move), board.in_check(), f"{tag}: gives_check {board.describe(move)}")
             board.unmake()
             self.assertEqual(state_of(board), before, f"{tag}: make/unmake of {board.describe(move)}")
+        # captures(): every capture and every promotion, promoting to a queen only
+        noisy = [m for m in moves
+                 if (board.cells[(m >> 9) & 511] or m >> 21 == 2 or move_promotion(m)) and move_promotion(m) in (0, 5)]
+        self.assertEqual(sorted(m for m in board.captures() if m in moves), sorted(noisy), f"{tag}: captures()")
         return moves
 
     def play(self, game, board, move):

@@ -53,6 +53,7 @@ def build_piece_square_values(tables):
 
 def evaluate(board):
     """The position's score for the player to move"""
-    if board.insufficient(0) and board.insufficient(1):
+    # Only tiny positions can be dead draws, so the check is skipped for all the others
+    if len(board.squares[0]) + len(board.squares[1]) <= 4 and board.insufficient(0) and board.insufficient(1):
         return DRAW
     return board.score if board.side == 0 else -board.score

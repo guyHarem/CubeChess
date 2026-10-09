@@ -49,10 +49,13 @@ def parse_coord(value):
 @app.route('/api/game/new', methods=['POST'])
 def new_game():
     """Start a new game. Optional body:
-    {"rocks": true, "move_limit": 50, "clock": {"initial": 600, "increment": 5}} (clock in seconds, omit for none)"""
+    {"rocks": true, "move_limit": 50, "clock": {"initial": 600, "increment": 5},
+     "computer": {"color": "black", "level": "hard"}} (clock in seconds; omit clock or computer for none)"""
     data = request.get_json(silent=True) or {}
     response = g.manager.new_game(rocks=bool(data.get("rocks", True)), move_limit=data.get("move_limit", 50),
-                                     clock=data.get("clock"))
+                                     clock=data.get("clock"), computer=data.get("computer"))
+    if response.get("success") and response.get("computer") and hasattr(g.manager._think, "warm_up"):
+        g.manager._think.warm_up()
     status_code = 200 if response.get("success") else 400
     return jsonify(convert_response(response)), status_code
 
@@ -108,6 +111,14 @@ def make_move():
         return jsonify(convert_response(response)), status_code
     except (TypeError, ValueError):
         return jsonify({"success": False, "error": "Invalid coordinate format"}), 400
+
+
+@app.route('/api/game/computer-move', methods=['POST'])
+def computer_move():
+    """Let the computer think and play. The page calls this when it is the computer's turn."""
+    response = g.manager.computer_move()
+    status_code = 200 if response.get("success") else 400
+    return jsonify(convert_response(response)), status_code
 
 
 # ==================== SPECIAL MOVES ====================
@@ -243,5 +254,8 @@ def debug_rocks():
 # ==================== SERVER ====================
 
 if __name__ == '__main__':
+    # The computer player thinks in a worker process so the server stays responsive
+    from api.thinker import ProcessThinker
+    game_manager._think = practice_manager._think = ProcessThinker()
     # macOS reserves port 5000 for AirPlay Receiver, so default to 5001
     app.run(debug=True, port=int(os.environ.get("PORT", 5001)))

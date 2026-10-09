@@ -1,6 +1,8 @@
 import time
 
+from ai.levels import LEVELS, accepts_draw, think_time
 from api.clock import ChessClock
+from api.thinker import think
 from engine.game_state import GameState
 from engine.pieces import King, Queen, Rook, Bishop, Knight, Pawn, Rock
 
@@ -27,6 +29,10 @@ class GameManager:
         self.result = None
         self._clock_stack = []    # clock snapshot before each turn, so undo can put the time back
         self._now = time.monotonic
+        self.computer = None      # {"color", "level"} when the computer plays one side
+        self._think = think       # how the computer thinks: think(game, level, seconds) -> dict (see api/thinker.py)
+        self._version = 0         # goes up with every change, so a slow computer move can tell it is out of date
+        self._thinking_about = None   # the version the computer is thinking about right now, if any
 
     # ==================== HELPERS ====================
 
@@ -98,6 +104,7 @@ class GameManager:
             "halfmove_clock": self.game.halfmove_clock,
             "move_limit": self.game.move_limit,
             "clock": self.clock.to_json() if self.clock is not None else None,
+            "computer": dict(self.computer) if self.computer is not None else None,
             "pending_promotion": self.game.pending_promotion,
             "move_history": self.game.move_history
         }
@@ -110,11 +117,18 @@ class GameManager:
 
     # ==================== GAME SETUP ====================
 
-    def new_game(self, rocks=True, move_limit=50, clock=None):
-        """clock: None for an untimed game, or {"initial": seconds, "increment": seconds}"""
+    def new_game(self, rocks=True, move_limit=50, clock=None, computer=None):
+        """clock: None for an untimed game, or {"initial": seconds, "increment": seconds}
+        computer: None for two human players, or {"color": "black", "level": "easy" | "medium" | "hard"}"""
         try:
             if type(move_limit) is not int or not 1 <= move_limit <= 500:
                 raise ValueError("move_limit must be a whole number from 1 to 500")
+
+            if computer is not None:
+                if (not isinstance(computer, dict) or computer.get("color") not in ("white", "black")
+                        or computer.get("level") not in LEVELS):
+                    raise ValueError('computer must be {"color": "white" or "black", "level": "easy", "medium" or "hard"}')
+                computer = {"color": computer["color"], "level": computer["level"]}
 
             new_clock = None
             if clock is not None:
@@ -133,16 +147,18 @@ class GameManager:
                     if isinstance(piece, Rock):
                         board.remove_piece(coord)
                 game.reset_tracking()
-            self._replace_game(game, new_clock)
+            self._replace_game(game, new_clock, computer)
             return self._state_response()
         except ValueError as e:
             return self._error_response(e)
 
-    def _replace_game(self, game, clock=None):
+    def _replace_game(self, game, clock=None, computer=None):
         self.game = game
         self.clock = clock
         self.result = None
         self._clock_stack = []
+        self.computer = computer
+        self._version += 1
 
     def _mark_check(self, response):
         """Note on the last history entry whether that move gave check or checkmate (for move notation)"""
@@ -188,9 +204,14 @@ class GameManager:
         if self.clock is not None and self.game.current_player != mover:
             self.clock.finish_turn(mover, self.game.current_player)
 
-    def make_move(self, from_coord, to_coord):
+    def _computer_to_move(self):
+        return self.computer is not None and self.game.current_player == self.computer["color"]
+
+    def make_move(self, from_coord, to_coord, by_computer=False):
         try:
             self._require_ongoing()
+            if self._computer_to_move() and not by_computer:
+                raise ValueError("It is the computer's turn")
 
             mover = self.game.current_player
             snapshot = self.clock.snapshot() if self.clock is not None else None
@@ -199,19 +220,62 @@ class GameManager:
             # For move notation: the other pieces of the same kind that could have made this move
             self.game.move_history[-1]["ambiguous_from"] = ambiguous_from
             self._clock_stack.append(snapshot)
+            self._version += 1
             self._finish_turn(mover)
             return self._mark_check(self._state_response())
         except ValueError as e:
             return self._error_response(e)
 
-    def promote_pawn(self, coord, new_piece):
+    def promote_pawn(self, coord, new_piece, by_computer=False):
         try:
             self._require_ongoing()
+            if self._computer_to_move() and not by_computer:
+                raise ValueError("It is the computer's turn")
 
             mover = self.game.current_player
             self.game.promote_pawn(coord, new_piece)
+            self._version += 1
             self._finish_turn(mover)
             return self._mark_check(self._state_response())
+        except ValueError as e:
+            return self._error_response(e)
+
+    # ==================== THE COMPUTER PLAYER ====================
+
+    def computer_move(self):
+        """Let the computer think and play its move. The thinking takes seconds and the game
+        may change meanwhile (undo, new game); a move for a position that is gone is dropped."""
+        try:
+            self._require_ongoing()
+            if self.computer is None:
+                raise ValueError("This game has no computer player")
+            if not self._computer_to_move() or self.game.pending_promotion is not None:
+                raise ValueError("It is not the computer's turn")
+            version = self._version
+            if self._thinking_about == version:
+                raise ValueError("The computer is already thinking")
+
+            color, level = self.computer["color"], self.computer["level"]
+            clock_left = self.clock.time_left(color) if self.clock is not None else None
+            increment = self.clock.increment if self.clock is not None else 0
+            self._thinking_about = version
+            try:
+                thought = self._think(self.game, level, think_time(level, clock_left, increment))
+            finally:
+                if self._thinking_about == version:
+                    self._thinking_about = None
+
+            if self._version != version:
+                raise ValueError("The position changed while the computer was thinking")
+            if thought is None:
+                raise ValueError("The computer has no legal move")
+
+            response = self.make_move(thought["from"], thought["to"], by_computer=True)
+            if response["success"] and self.game.pending_promotion is not None:
+                piece = PIECE_CLASSES[thought["promotion"] or "Queen"](color)
+                response = self.promote_pawn(thought["to"], piece, by_computer=True)
+            response["thought"] = {key: thought[key] for key in ("score", "depth", "nodes", "seconds", "mate_in")}
+            return response
         except ValueError as e:
             return self._error_response(e)
 
@@ -220,19 +284,27 @@ class GameManager:
     def resign(self, color=None):
         try:
             if color is None:
-                color = self.game.current_player
+                # Against the computer only the human can resign; otherwise the player to move does
+                color = other(self.computer["color"]) if self.computer is not None else self.game.current_player
             if color not in ("white", "black"):
                 raise ValueError(f"Invalid color: {color}")
             self._require_ongoing()
             self.result = {"kind": "resigned", "winner": other(color)}
+            self._version += 1
             return self._state_response()
         except ValueError as e:
             return self._error_response(e)
 
     def agree_draw(self):
+        """Both players agree to a draw. Against the computer this is an offer it may decline."""
         try:
             self._require_ongoing()
+            if self.computer is not None and not accepts_draw(self.game, self.computer["color"], self.computer["level"]):
+                response = self._error_response("The computer declines the draw")
+                response["draw_declined"] = True
+                return response
             self.result = {"kind": "agreed_draw", "winner": None}
+            self._version += 1
             return self._state_response()
         except ValueError as e:
             return self._error_response(e)
@@ -241,14 +313,23 @@ class GameManager:
 
     def undo_move(self):
         """Take back the last turn. Also reopens a game that ended by resignation, agreement or timeout,
-        and puts the clocks back to where they were before that turn."""
-        if not self.game.undo_move():
+        and puts the clocks back to where they were before that turn. Against the computer its
+        reply is taken back too, so it is the human's move again."""
+        if not self._undo_one():
             return self._error_response("No moves to undo")
+        if self._computer_to_move():
+            self._undo_one()
+        return self._state_response()
+
+    def _undo_one(self):
+        if not self.game.undo_move():
+            return False
         self.result = None
+        self._version += 1
         snapshot = self._clock_stack.pop() if self._clock_stack else None
         if self.clock is not None and snapshot is not None:
             self.clock.restore(snapshot)
-        return self._state_response()
+        return True
 
     # ==================== SANDBOX (TESTING ONLY) ====================
     # Edit the position directly to test move/capture behavior. Every edit
@@ -337,6 +418,7 @@ class GameManager:
                 raise ValueError("Promote the pawn before changing the turn!")
             self.game.current_player = player
             self.game.restart_draw_tracking()
+            self._version += 1
             return self._state_response()
         except ValueError as e:
             return self._error_response(e)

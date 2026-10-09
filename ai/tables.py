@@ -93,6 +93,17 @@ class Tables:
         # can be shielding a king on that square
         self.aligned = [frozenset(target for line in self.slides[QUEEN][square] for target in line)
                         for square in range(n)]
+        # line_to[a][b] = (is it a rook line?, the whole line from a that passes through b)
+        self.line_to = []
+        for square in range(n):
+            entry = {}
+            for kind, straight in ((ROOK, True), (BISHOP, False)):
+                for line in self.slides[kind][square]:
+                    for target in line:
+                        entry[target] = (straight, line)
+            self.line_to.append(entry)
+        self.knight_set = [frozenset(squares) for squares in self.knight]
+        self.pawn_attacker_set = tuple([frozenset(squares) for squares in table] for table in self.pawn_attackers)
 
         # Random numbers for position fingerprints (Zobrist hashing); fixed seed so runs repeat
         rng = random.Random(20261009)
