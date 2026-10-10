@@ -112,5 +112,11 @@ class Tables:
         self.z_castle = [rng.getrandbits(64) for _ in range(n)]
         self.z_en_passant = [rng.getrandbits(64) for _ in range(n)]
 
-        self.features = None  # per piece and square, what the scoring looks at (ai.evaluate)
-        self.pst_cache = {}   # piece-square values for each set of scoring parameters
+        # distance[a][b]: king steps from a to b on an empty board (sideways/diagonal in the
+        # layer, plus one step per layer)
+        self.distance = [[max(abs(ax - bx), abs(ay - by)) + abs(az - bz) for bx, by, bz in self.coords]
+                         for ax, ay, az in self.coords]
+        self.max_distance = (size - 1) + (z_max - z_min)
+
+        self.features = None    # per piece and square, what the scoring looks at (ai.evaluate)
+        self.scoring_cache = {}  # value tables for each set of scoring parameters

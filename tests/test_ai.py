@@ -11,7 +11,7 @@ import time
 import unittest
 
 from ai.board import FastBoard
-from ai.evaluate import DEFAULT_PARAMS, MATE, position_features
+from ai.evaluate import DEFAULT_PARAMS, MATE, cornering, position_features
 from ai.levels import LEVELS, accepts_draw, choose_move, think_time
 from ai.search import Search
 from api.game_manager import GameManager
@@ -186,9 +186,11 @@ class TestScoringParameters(unittest.TestCase):
             board = FastBoard.from_game_state(game)
             features = position_features(board)
             expected = sum(DEFAULT_PARAMS[name] * amount for name, amount in features.items())
-            # Each piece's value is rounded to a whole number, so allow half a point per piece
+            # Each piece's placement and closeness values are rounded to whole numbers, so
+            # allow a point per piece
             pieces_on_board = len(board.squares[0]) + len(board.squares[1])
-            self.assertAlmostEqual(board.score, expected, delta=pieces_on_board / 2 + 0.01, msg=f"ply {ply}")
+            self.assertAlmostEqual(board.score + cornering(board), expected, delta=pieces_on_board + 0.01,
+                                   msg=f"ply {ply}")
             move = rng.choice(board.legal_moves())
             from_coord, to_coord, promotion = board.describe(move)
             game.make_move(from_coord, to_coord)
@@ -213,6 +215,67 @@ class TestScoringParameters(unittest.TestCase):
             choice = choose_move(game, "medium", rng=random.Random(1), params=params)
             takes[name] = choice.to_coord
         self.assertEqual(takes, {"rook": (0, 6, 0), "knight": (3, 3, 0)})
+
+
+class TestCorneringTheKing(unittest.TestCase):
+    """Two scoring terms give the computer a sense of closing in: pieces near the enemy king,
+    and, against a bare king, how few exits it has and how close the attacker's king is"""
+
+    def corner(self, placed, **keywords):
+        return cornering(FastBoard.from_game_state(position(placed, **keywords)))
+
+    def test_only_applies_against_a_bare_king(self):
+        self.assertEqual(cornering(FastBoard.from_game_state(GameState())), 0)
+        both_have_pieces = {(4, 0, 0): King("white"), (4, 7, 0): King("black"),
+                            (3, 0, 0): Queen("white"), (0, 7, 0): Knight("black")}
+        self.assertEqual(self.corner(both_have_pieces), 0)
+
+    def test_fewer_exits_and_a_closer_king_score_higher(self):
+        def score(black_king, white_king=(4, 0, 0)):
+            return self.corner({white_king: King("white"), black_king: King("black"), (0, 3, 1): Queen("white")})
+        open_board, edge, corner = score((4, 4, 0)), score((4, 7, 0)), score((7, 7, 2))
+        self.assertGreater(open_board, 0)
+        self.assertGreater(edge, open_board + 70 * 3 - 35 * 3 - 1)   # three exits fewer, three steps further
+        self.assertGreater(corner, edge)
+        self.assertGreater(score((7, 7, 2), white_king=(5, 5, 2)), corner)
+
+    def test_it_is_the_attackers_bonus_whichever_color_attacks(self):
+        white_attacks = self.corner({(4, 0, 0): King("white"), (7, 7, 2): King("black"), (0, 3, 1): Queen("white")})
+        black_attacks = self.corner({(4, 7, 0): King("black"), (7, 0, 2): King("white"), (0, 4, 1): Queen("black")})
+        self.assertEqual(white_attacks, -black_attacks)
+
+    def test_no_bonus_for_pieces_that_can_never_mate(self):
+        lone_rook = {(4, 0, 0): King("white"), (7, 7, 2): King("black"), (0, 3, 1): Rook("white")}
+        self.assertEqual(self.corner(lone_rook), 0)
+
+    def test_a_rock_counts_as_a_lost_exit(self):
+        free = self.corner({(0, 0, 0): King("white"), (3, 3, 2): King("black"), (0, 3, 1): Queen("white")})
+        game = position({(0, 0, 0): King("white"), (3, 3, 2): King("black"), (0, 3, 1): Queen("white")})
+        game.board.set_piece(pieces.Rock(), (3, 3, 1))   # right under the black king
+        self.assertEqual(cornering(FastBoard.from_game_state(game)), free + 70)
+
+    def test_pieces_near_the_enemy_king_score_higher(self):
+        def score(queen):
+            return FastBoard.from_game_state(position({(4, 0, 0): King("white"), (4, 7, 0): King("black"),
+                                                       queen: Queen("white"), (0, 6, 2): Rook("black")})).score
+        # Both squares are on the same layer and reach the same number of squares
+        far, near = score((1, 1, 0)), score((6, 6, 0))
+        self.assertEqual(near - far, 61 * 2)   # two steps from the king against four or more
+
+    def test_two_queens_mate_a_bare_king(self):
+        game = position({(4, 0, 0): King("white"), (4, 7, 2): King("black"),
+                         (3, 0, 0): Queen("white"), (5, 0, 0): Queen("white")})
+        manager = GameManager()
+        manager._replace_game(game)
+        response = manager.get_state()
+        for ply in range(60):
+            board = FastBoard.from_game_state(manager.game)
+            from_coord, to_coord, _ = board.describe(Search(board).run(nodes=6000).move)
+            response = manager.make_move(from_coord, to_coord)
+            self.assertTrue(response["success"], response.get("error"))
+            if response["status"] not in ("ongoing", "check"):
+                break
+        self.assertEqual((response["status"], response["winner"]), ("checkmate", "white"))
 
 
 class TestScores(unittest.TestCase):

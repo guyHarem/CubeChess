@@ -8,7 +8,7 @@ takes back moves in place, which is about a thousand times faster.
 A cell holds 0 (empty), ROCK, or piece type | colour bit | UNMOVED bit.
 A move is one integer: from | to << 9 | promotion piece << 18 | kind << 21.
 """
-from ai.evaluate import build_piece_square_values, DEFAULT_PARAMS
+from ai.evaluate import build_near_values, build_piece_square_values, DEFAULT_PARAMS
 from ai.tables import (tables_for, PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING, ROCK,
                        WHITE, BLACK, UNMOVED)
 
@@ -41,10 +41,14 @@ class FastBoard:
     def __init__(self, size=8, z_min=-2, z_max=2, params=None):
         """params: scoring parameters (see ai/evaluate.py); the tuned defaults when left out"""
         self.t = tables = tables_for(size, z_min, z_max)
-        key = tuple(sorted((params or DEFAULT_PARAMS).items()))
-        if key not in tables.pst_cache:
-            tables.pst_cache[key] = build_piece_square_values(tables, params)
-        self.pst = tables.pst_cache[key]   # what each piece is worth on each square
+        params = params or DEFAULT_PARAMS
+        key = tuple(sorted(params.items()))
+        if key not in tables.scoring_cache:
+            tables.scoring_cache[key] = (build_piece_square_values(tables, params), build_near_values(tables, params))
+        # pst: what each piece is worth on each square; near: its bonus by distance to the enemy king
+        self.pst, self.near = tables.scoring_cache[key]
+        self.corner_exits = round(params["corner_exits"])    # see ai.evaluate.cornering
+        self.corner_kings = round(params["corner_kings"])
         self.cells = [0] * tables.n
         self.side = WHITE                  # WHITE (0) or BLACK (8) to move
         self.squares = (set(), set())      # where each colour's pieces stand
@@ -54,7 +58,7 @@ class FastBoard:
         self.ep_pawn = -1                  # the pawn that capture would remove
         self.half = 0                      # single moves since the last capture or pawn move
         self.move_limit = 50               # draw after this many quiet moves by each player
-        self.score = 0                     # material and placement, White minus Black
+        self.score = 0                     # material, placement and closeness to the enemy king, White minus Black
         self.pieces_key = 0                # fingerprint of the pieces alone
         self.rights_key = 0                # ... of the castling options still open
         self.key = 0                       # ... of the whole position (see _full_key)
@@ -83,6 +87,7 @@ class FastBoard:
             board.ep, board.ep_pawn = index[target[0]], index[target[1]]
         board.half = game.halfmove_clock
         board.move_limit = game.move_limit
+        board.score += board._closeness_to_kings()
         board.rights_key = board._castling_key()
         board.key = board._full_key(board._en_passant_key())
         # Earlier positions matter for the repetition rule
@@ -100,6 +105,19 @@ class FastBoard:
         self.pieces_key ^= self.t.z_piece[base][square]
         if code & 7 == KING:
             self.kings[colour] = square
+
+    def _closeness_to_kings(self):
+        """The whole "pieces near the enemy king" part of the score, worked out from scratch.
+        make() keeps it up to date move by move."""
+        total = 0
+        cells, near = self.cells, self.near
+        for colour in (0, 1):
+            enemy_king = self.kings[colour ^ 1]
+            if enemy_king >= 0:
+                row = self.t.distance[enemy_king]
+                for square in self.squares[colour]:
+                    total += near[cells[square] & 15][row[square]]
+        return total
 
     # ==================== FINGERPRINTS ====================
     # Two positions get the same key exactly when the engine's repetition rule calls them the
@@ -422,8 +440,13 @@ class FastBoard:
         self.history.append(self.key)
 
         pst, z = self.pst, tables.z_piece
+        near, distance = self.near, tables.distance
+        own_king, enemy_king = self.kings[colour], self.kings[colour ^ 1]
+        king_taken = False
         score = self.score - pst[placed][origin]
         pieces_key = self.pieces_key ^ z[placed][origin]
+        if enemy_king >= 0:
+            score -= near[placed][distance[enemy_king][origin]]
         promotion = (move >> 18) & 7
         if promotion:
             self.counts[placed] -= 1
@@ -431,16 +454,21 @@ class FastBoard:
             self.counts[placed] += 1
         score += pst[placed][target]
         pieces_key ^= z[placed][target]
+        if enemy_king >= 0:
+            score += near[placed][distance[enemy_king][target]]
 
         if taken:
             base = taken & 15
             score -= pst[base][taken_on]
+            if own_king >= 0:
+                score -= near[base][distance[own_king][taken_on]]
             pieces_key ^= z[base][taken_on]
             self.squares[colour ^ 1].remove(taken_on)
             self.counts[base] -= 1
             cells[taken_on] = 0
             if base & 7 == KING:
                 self.kings[colour ^ 1] = -1
+                king_taken = True
 
         cells[origin] = 0
         cells[target] = placed
@@ -450,6 +478,11 @@ class FastBoard:
 
         if placed & 7 == KING:
             self.kings[colour] = target
+            # Every enemy piece is now nearer to or further from this king
+            old_row, new_row = distance[origin], distance[target]
+            for square in self.squares[colour ^ 1]:
+                code = cells[square] & 15
+                score += near[code][new_row[square]] - near[code][old_row[square]]
             if kind == CASTLE:
                 step = 1 if target > origin else -1
                 rook_to = target - step
@@ -462,9 +495,16 @@ class FastBoard:
                 mine.remove(rook_from)
                 mine.add(rook_to)
                 score += pst[rook][rook_to] - pst[rook][rook_from]
+                if enemy_king >= 0:
+                    score += near[rook][distance[enemy_king][rook_to]] - near[rook][distance[enemy_king][rook_from]]
                 pieces_key ^= z[rook][rook_from] ^ z[rook][rook_to]
                 self._undo[-1] += (rook_from,)
 
+        if king_taken:
+            # Only in practice positions: with a king gone, work the closeness out afresh
+            score = sum(pst[cells[square] & 15][square] for squares in self.squares for square in squares)
+            self.score = score
+            score += self._closeness_to_kings()
         self.score = score
         self.pieces_key = pieces_key
         self.half = 0 if (piece & 7 == PAWN or taken) else self.half + 1

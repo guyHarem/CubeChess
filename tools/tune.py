@@ -187,7 +187,11 @@ def fit(args):
     spread, estimate = feature_spread(args.data)
     print(f"about {estimate} positions")
     training, held_out = Dataset(args.data), Dataset(args.data, held_out=True)
-    tuned = [i for i, name in enumerate(PARAM_NAMES) if name not in FIXED_PARAMS]
+    frozen = set(FIXED_PARAMS) | set(filter(None, args.freeze.split(",")))
+    unknown = frozen - set(PARAM_NAMES)
+    if unknown:
+        raise SystemExit(f"unknown parameters: {', '.join(sorted(unknown))}")
+    tuned = [i for i, name in enumerate(PARAM_NAMES) if name not in frozen]
 
     weights = [float(start[name]) for name in PARAM_NAMES]
     # First find the scale that turns the current scores into the best win predictions
@@ -288,6 +292,9 @@ def main():
     command.add_argument("--steps", type=int, default=300)
     command.add_argument("--rate", type=float, default=0.02)
     command.add_argument("--hold", type=float, default=0.002, help="how strongly to stay near the starting values")
+    command.add_argument("--freeze", default="corner_exits,corner_kings",
+                         help="parameters to leave alone (the cornering pair is set with tools/endgames.py: "
+                              "bare-king endings are too rare in self-play to fit them)")
     command.set_defaults(run=fit)
 
     command = commands.add_parser("match", help="play two sets of parameters against each other")

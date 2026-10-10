@@ -90,9 +90,11 @@ The computer is not trained; it plays like a classic chess program (`ai/`):
 2. It looks ahead: its moves, your replies, its answers (`ai/search.py`, alpha-beta search).
    Lines that are already worse than one it has found are dropped, and at the end of a line
    it follows captures until the position is quiet.
-3. It scores the positions it reaches by material and placement (`ai/evaluate.py`). The
-   numbers were tuned by self-play: pawn 1, knight 3.75, bishop 4.3, rook 4.4, queen 11.9,
-   and a pawn two steps from promotion is worth about 3.4.
+3. It scores the positions it reaches (`ai/evaluate.py`) by material, by where each piece
+   stands, and by how close its pieces are to the enemy king. Against a bare king it also
+   scores cornering: the fewer squares that king can step to and the closer the attacker's
+   own king, the better. The numbers were tuned by self-play: pawn 1, knight 3.3, bishop 4,
+   rook 4.1, queen 12.2, and a pawn two steps from promotion is worth about 4.
 
 | Level | Looks ahead | Picks |
 |---|---|---|
@@ -104,8 +106,13 @@ Every scoring number is a named parameter in `ai/evaluate.py`. `python tools/tun
 them by self-play in three steps: `games` (the computer plays itself and saves the quiet
 positions with each game's result), `fit` (find the parameters whose score best predicts
 who won) and `match` (the new numbers play the current ones; keep them only if they win).
-Two rounds of 2,000 games have been run. Round one beat the first guesses 228-23 with 49
-draws; round two beat round one 253-196 with 151 draws.
+Three rounds of 2,000 games have been run. Round one beat the first guesses 228-23 with 49
+draws, round two beat round one 253-196 with 151 draws, and round three (with the king terms
+added) beat round two 160-73 with 67 draws.
+
+`python tools/endgames.py` measures how often the computer mates a bare king from random
+positions with a queen, two rooks and so on. Before the cornering terms it managed 11 of 128;
+now it manages 102 of 160. Two rooks, or rook, bishop and knight, still usually fail.
 
 `python tools/play_match.py` plays the levels against each other (hard beat medium 40-0 and
 medium beat easy 20-0), and is the way to check that a change makes the computer stronger.
@@ -228,7 +235,7 @@ CubeChess/
 │   │   ├── bench/        # Developer test bench
 │   │   └── pieces3d.js   # Procedural 3D piece models
 │   └── dev/              # Sprite renderer used for the design artboards
-├── tools/                # Scenario generator, level matches, mating-material check
+├── tools/                # Scenario generator, level matches, self-play tuning, endgame and mating-material checks
 ├── tests/                # Test suite
 └── IMPLEMENTATION_GUIDE.md # Original planning notes
 ```
