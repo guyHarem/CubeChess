@@ -17,7 +17,7 @@ A 3D chess variant on a 5-layer cube board. This is a **work in progress (WIP)**
 
 - ✅ **Flask API** (`api/`) — RESTful backend
   - GameManager wrapper layer
-  - 6 API endpoints for game management
+  - Every game in its own room with its own address; online games with seats and offers
   - JSON serialization utilities
   - CORS enabled for frontend
 
@@ -28,7 +28,8 @@ A 3D chess variant on a 5-layer cube board. This is a **work in progress (WIP)**
 - ✅ Lesson player: nine lessons on a 5×5 three-layer board (`cubechess-frontend/src/lessons.json`)
 - ✅ Scenario player: 30 checkmate puzzles in four tiers (`cubechess-frontend/src/scenarios.json`)
 - ✅ Play against the computer (easy, medium, hard), with the last move marked on the board
-- ⏳ Online play
+- ✅ Online play with a link: seats without accounts, draw and take-back offers, watching
+- ⏳ Hosting (so far it runs on your own machine and network)
 - 🔧 Developer test bench at `#/bench` for checking backend behavior
 
 ### Phase 3: Polish & Deployment (Not Started)
@@ -122,7 +123,7 @@ The scenarios are generated, not hand-written: `python tools/generate_scenarios.
 random positions for ones where White has exactly one way to force mate, and rewrites
 `scenarios.json`. `tests/test_scenarios.py` re-checks every puzzle against the engine.
 
-Pages (hash routes): `#/` home, `#/setup` new game, `#/game` the board, `#/learn` lessons,
+Pages (hash routes): `#/` home, `#/setup` new game, `#/game/<id>` the board, `#/learn` lessons,
 `#/scenarios` puzzles, `#/bench` the developer test bench. The frontend needs the backend running; Vite proxies `/api` to port 5001.
 
 The layers are named, top to bottom: Space, Sky, Ground, Dungeon, Abyss. Move notation is
@@ -138,7 +139,11 @@ The test bench edits positions through sandbox endpoints that are for testing on
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/api/game/new` | POST | Start new game. Optional body: `{"rocks": true, "move_limit": 50, "clock": {"initial": 600, "increment": 5}, "computer": {"color": "black", "level": "hard"}}` |
+| `/api/games` | POST | Open a room and start a game in it (see Rooms below) |
+| `/api/game/join` | POST | Online: take the free seat, or watch |
+| `/api/game/offer` | POST | Online: offer a draw or ask to take a move back |
+| `/api/game/answer` | POST | Online: accept, decline or withdraw the offer |
+| `/api/game/new` | POST | Start a new game in the same room. Optional body: `{"rocks": true, "move_limit": 50, "clock": {"initial": 600, "increment": 5}, "computer": {"color": "black", "level": "hard"}}` |
 | `/api/game/state` | GET | Get current board state |
 | `/api/game/move` | POST | Execute a move |
 | `/api/game/legal-moves` | GET | Get legal moves for piece |
@@ -184,8 +189,30 @@ while the computer thinks (undo, new game), its move is dropped and the call fai
 reply together with your move. `/draw` is an offer the computer may refuse: the call then
 fails with `draw_declined: true`. `/resign` without a color is the human's resignation.
 
-**Two games:** the server keeps a `main` game and a separate `practice` game used by the
-lessons. Every endpoint works on `main` unless the request adds `?game=practice`.
+**Rooms:** every game lives in its own room (`api/rooms.py`). `POST /api/games` with
+`{"kind": "local" | "computer" | "online" | "practice", ...the options of /api/game/new}` opens
+one and answers with its `game_id`; every other endpoint then takes `?game=<game_id>`. Game
+answers also carry `kind`, `version` and `stamp`. Rooms are kept in memory: they are lost when
+the server restarts and removed a day after their last use (a request for one that is gone gets
+HTTP 404 with `gone: true`). Two rooms always exist for the test bench and the tests: `main`,
+used when no game is named, and `practice`.
+
+**Online games:** opening one with `"side": "white"` answers with a secret `seat` key for that
+color. `POST /api/game/join` gives the first other visitor the key for the other color; later
+visitors get none and can only watch. The key travels in the `X-Seat` header, and the server
+lets only the holder of a color's key move, promote or resign for it. The game's `online`
+field tells the page `you` (your color or `null`), which `seats` are taken, who is `connected`
+(heard from in the last 6 seconds) and the pending `offer`.
+- `POST /api/game/offer` `{"kind": "draw" | "takeback"}` makes an offer; `POST /api/game/answer`
+  `{"accept": true | false}` answers it (the offerer can withdraw with `false`). A move declines
+  a pending offer. An accepted take-back undoes the asker's last move, and the reply to it if
+  there was one.
+- `/undo`, `/draw`, `/new` and the sandbox endpoints are refused in online games.
+- Pages keep up by asking `GET /api/game/state?since=<stamp>` once a second; if nothing changed
+  the answer is short (`unchanged: true`, the clock and `online`).
+
+To play from another device on your network, start the frontend with `npm run dev -- --host`
+and open the address it prints there; the link you send must use that address, not `localhost`.
 
 **Clock:** `clock` is `null` for an untimed game, otherwise
 `{"initial", "increment", "white", "black", "running"}` in seconds. A player's clock runs only
@@ -224,6 +251,7 @@ CubeChess/
 ├── api/                   # Flask backend
 │   ├── app.py            # HTTP routes
 │   ├── game_manager.py   # Business logic wrapper
+│   ├── rooms.py          # One room per game; seats and offers for online games
 │   ├── clock.py          # Chess clock
 │   ├── thinker.py        # Runs the computer's thinking in a worker process
 │   └── utils.py          # JSON serialization

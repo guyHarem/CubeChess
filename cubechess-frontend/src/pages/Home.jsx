@@ -39,7 +39,7 @@ export default function Home() {
               <CubeBoard interactive={false} board={START_BOARD} />
             </div>
             <h2>Play CubeChess</h2>
-            <p>Play the computer or a friend on one screen. You pick the side and the rules.</p>
+            <p>Play the computer, a friend beside you, or a friend online with a link.</p>
             <span className="button button-primary">Set up a game</span>
           </a>
 

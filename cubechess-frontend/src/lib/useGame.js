@@ -1,27 +1,43 @@
 // Game state from the backend plus the local selection (which piece is picked up)
-import { useCallback, useEffect, useState } from 'react'
-import { api, legalMovesOf } from './api.js'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { api, legalMovesOf, rememberSeat } from './api.js'
 import { keyOf, parsePiece, sameCoord } from './chess.js'
 
 const OFFLINE = 'Cannot reach the game server. Start it with: python api/app.py'
+const POLL_MS = 1000 // how often an online game asks whether the other player has done something
 
-// which: 'main' for the real game, 'practice' for the lesson board
+// which: a room id, or 'practice' for the lesson board
 export function useGame(which = 'main') {
   const [game, setGame] = useState(null)
   const [selected, setSelected] = useState(null)
   const [legalMoves, setLegalMoves] = useState([])
   const [error, setError] = useState(null)
+  const [gone, setGone] = useState(false) // the server no longer has this game
+  const latest = useRef(null)
 
   const clearSelection = useCallback(() => {
     setSelected(null)
     setLegalMoves([])
   }, [])
 
+  // Take in an answer that carries the whole game. Answers can arrive out of order (a slow
+  // "what is the state?" after a quick move), so one older than what we show is dropped.
+  const accept = useCallback((data) => {
+    if (data.gone) setGone(true)
+    if (data.board) {
+      const shown = latest.current
+      if (shown && shown.game_id === data.game_id && data.version < shown.version) return
+      const next = { ...data, receivedAt: performance.now() }
+      latest.current = next
+      setGame(next)
+    }
+  }, [])
+
   // Every state-changing endpoint answers with the whole game
   const call = useCallback(async (path, body) => {
     try {
       const data = await api(path, body, which)
-      if (data.board) setGame({ ...data, receivedAt: performance.now() })
+      accept(data)
       // A declined draw offer is an answer, not a fault: the page shows it its own way
       setError(data.success || data.draw_declined ? null : data.error)
       setSelected(null)
@@ -31,39 +47,83 @@ export function useGame(which = 'main') {
       setError(OFFLINE)
       return null
     }
-  }, [which])
+  }, [which, accept])
 
   useEffect(() => {
-    api('/game/state', undefined, which)
-      .then((data) => {
-        setGame({ ...data, receivedAt: performance.now() })
+    let stopped = false
+    let timer = null
+
+    // In an online game, sit down if there is a free seat, then keep asking for news
+    async function keepUp() {
+      const current = latest.current
+      if (stopped || !current || current.kind !== 'online') return
+      try {
+        const data = await api('/game/state?since=' + encodeURIComponent(current.stamp), undefined, which)
+        if (stopped) return
+        if (data.gone) setGone(true)
+        else if (data.unchanged) {
+          // Nothing happened; only who is connected may have changed
+          if (JSON.stringify(data.online) !== JSON.stringify(current.online)) {
+            latest.current = { ...current, online: data.online }
+            setGame(latest.current)
+          }
+        } else if (data.board) {
+          accept(data)
+          setSelected(null)
+          setLegalMoves([])
+        }
         setError(null)
-      })
-      .catch(() => setError(OFFLINE))
-  }, [which])
+      } catch {
+        setError(OFFLINE)
+      }
+      if (!stopped) timer = setTimeout(keepUp, POLL_MS)
+    }
+
+    async function begin() {
+      try {
+        let data = await api('/game/state', undefined, which)
+        if (stopped) return
+        if (data.kind === 'online' && !data.online.you) {
+          data = await api('/game/join', {}, which)
+          if (stopped) return
+          if (data.seat) rememberSeat(which, data.seat)
+        }
+        accept(data)
+        setError(null)
+        timer = setTimeout(keepUp, POLL_MS)
+      } catch {
+        setError(OFFLINE)
+      }
+    }
+
+    begin()
+    return () => {
+      stopped = true
+      clearTimeout(timer)
+    }
+  }, [which, accept])
 
   // Re-read the game without touching the selection (used when a clock runs out)
   const refresh = useCallback(async () => {
     try {
-      const data = await api('/game/state', undefined, which)
-      setGame({ ...data, receivedAt: performance.now() })
+      accept(await api('/game/state', undefined, which))
     } catch {
       setError(OFFLINE)
     }
-  }, [which])
+  }, [which, accept])
 
   // Ask the computer to think and play. A refusal still carries the current game, and is
   // normal when the position changed while it thought (undo, new game), so it shows no error.
   const computerMove = useCallback(async () => {
     try {
       const data = await api('/game/computer-move', {}, which)
-      if (data.board) setGame({ ...data, receivedAt: performance.now() })
+      accept(data)
       return data
     } catch {
       setError(OFFLINE)
       return null
     }
-  }, [which])
+  }, [which, accept])
 
   const select = useCallback(async (coord) => {
     try {
@@ -95,6 +155,7 @@ export function useGame(which = 'main') {
     selected,
     legalMoves,
     error,
+    gone,
     clickCell,
     clearSelection,
     select,
@@ -107,5 +168,8 @@ export function useGame(which = 'main') {
     newGame: (options) => call('/game/new', options ?? {}),
     undo: () => call('/game/undo', {}),
     promote: (pieceType) => call('/game/promote', { coord: game.pending_promotion, piece_type: pieceType }),
+    // Between online players: offer a draw or ask to take a move back, and answer one
+    offer: (kind) => call('/game/offer', { kind }),
+    answer: (yes) => call('/game/answer', { accept: yes }),
   }
 }

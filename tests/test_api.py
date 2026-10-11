@@ -601,7 +601,8 @@ class TestPracticeGame(unittest.TestCase):
         self.assertEqual(practice["board"], {"[2, 4, 1]": "Knight(white)"})
 
     def test_unknown_game_is_rejected(self):
-        self.assertEqual(self.client.get('/api/game/state?game=other').status_code, 400)
+        res = self.client.get('/api/game/state?game=other')
+        self.assertEqual((res.status_code, res.get_json()["gone"]), (404, True))
 
 
 if __name__ == '__main__':

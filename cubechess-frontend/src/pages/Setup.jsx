@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import CubeBoard from '../components/CubeBoard.jsx'
 import Logo from '../components/Logo.jsx'
-import { api } from '../lib/api.js'
+import { openGame } from '../lib/api.js'
 import { START_BOARD } from '../lib/chess.js'
 import { navigate } from '../lib/router.js'
 import { CLOCK_PRESETS, LEVELS, clockRequest, computerRequest, levelName, loadSettings, saveSettings } from '../lib/settings.js'
@@ -56,6 +56,7 @@ export default function Setup() {
         : `${CLOCK_PRESETS.find((option) => option.mode === clock.mode).label} each.`
   const previewSide = sideChoice === 'black' ? 'black' : 'white'
   const againstComputer = settings.opponent === 'computer'
+  const online = settings.opponent === 'online'
   const previewBoard = settings.rocks
     ? START_BOARD
     : Object.fromEntries(Object.entries(START_BOARD).filter(([, value]) => value !== 'Rock'))
@@ -64,15 +65,17 @@ export default function Setup() {
     setStarting(true)
     const side = sideChoice === 'random' ? (Math.random() < 0.5 ? 'white' : 'black') : sideChoice
     try {
-      const data = await api('/game/new', {
+      const data = await openGame({
+        kind: online ? 'online' : againstComputer ? 'computer' : 'local',
+        side,
         rocks: settings.rocks,
         move_limit: limit,
         clock: clockRequest(clock),
-        computer: computerRequest(settings, side),
+        computer: computerRequest(settings, side) ?? undefined,
       })
       if (!data.success) throw new Error(data.error)
       saveSettings({ ...settings, side, moveLimit: limit })
-      navigate('/game')
+      navigate(`/game/${data.game_id}`)
     } catch (problem) {
       setError(
         problem instanceof TypeError || problem instanceof SyntaxError
@@ -100,7 +103,7 @@ export default function Setup() {
             <legend>Opponent</legend>
             <div className="choices choices-3">
               <Choice
-                selected={!againstComputer}
+                selected={!againstComputer && !online}
                 onClick={() => set({ opponent: 'local' })}
                 title="Two players"
                 hint="Same screen, take turns"
@@ -111,13 +114,13 @@ export default function Setup() {
                 title="Computer"
                 hint="Pick a level below"
               />
-              <Choice disabled title="Online" hint="Not built yet" />
+              <Choice selected={online} onClick={() => set({ opponent: 'online' })} title="Online" hint="Send a friend a link" />
             </div>
           </fieldset>
 
           <div className="setup-pair">
             <fieldset>
-              <legend>{againstComputer ? 'Your side' : 'Side nearest you'}</legend>
+              <legend>{againstComputer || online ? 'Your side' : 'Side nearest you'}</legend>
               <div className="choices">
                 <Choice selected={sideChoice === 'white'} onClick={() => setSideChoice('white')}>
                   <i className="chip chip-white" />
@@ -232,7 +235,7 @@ export default function Setup() {
 
           <div className="setup-actions">
             <button type="button" className="button button-primary button-large" disabled={!limitValid || !clockValid || starting} onClick={start}>
-              {starting ? 'Starting' : 'Start game'}
+              {starting ? 'Starting' : online ? 'Create game' : 'Start game'}
             </button>
             <a className="bar-link" href="#/">
               Cancel
@@ -245,8 +248,18 @@ export default function Setup() {
             <CubeBoard interactive={false} board={previewBoard} side={previewSide} />
           </div>
           <p className="setup-summary">
-            <strong>{againstComputer ? `You against the computer, ${levelName(settings.level)}` : 'Two players on this screen'}</strong>
-            {againstComputer
+            <strong>
+              {againstComputer
+                ? `You against the computer, ${levelName(settings.level)}`
+                : online
+                  ? 'You against a friend online'
+                  : 'Two players on this screen'}
+            </strong>
+            {online
+              ? `You get a link to send. ${
+                  sideChoice === 'random' ? 'A coin flip decides your side.' : `You play ${previewSide === 'white' ? 'White and move first' : 'Black'}.`
+                }`
+              : againstComputer
               ? `${LEVELS.find((level) => level.id === settings.level).hint}. ${
                   sideChoice === 'random'
                     ? 'A coin flip decides your side.'

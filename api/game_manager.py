@@ -1,3 +1,6 @@
+import copy
+import functools
+import threading
 import time
 
 from ai.levels import LEVELS, accepts_draw, think_time
@@ -20,8 +23,19 @@ def other(color):
     return "black" if color == "white" else "white"
 
 
+def locked(method):
+    """The web server answers several requests at once (two players, each asking every
+    second). Only one of them may touch a game at a time."""
+    @functools.wraps(method)
+    def wrapper(self, *args, **kwargs):
+        with self.lock:
+            return method(self, *args, **kwargs)
+    return wrapper
+
+
 class GameManager:
     def __init__(self):
+        self.lock = threading.RLock()
         self.game = GameState()
         self.clock = None         # ChessClock, or None for an untimed game
         # An ending the rules engine doesn't know (resignation, agreed draw, timeout):
@@ -56,6 +70,7 @@ class GameManager:
         if self.clock is not None and self.result is None:
             flagged = self.clock.flagged()
             if flagged is not None:
+                self._version += 1
                 opponent = other(flagged)
                 # Running out of time only loses to an opponent who could still deliver checkmate
                 if self.game.has_insufficient_material(opponent):
@@ -95,8 +110,10 @@ class GameManager:
         board = self.game.get_board_state()
         return {
             "success": True,
+            "version": self._version,
             "current_player": self.game.current_player,
-            "board": board.board,
+            # Copies, so that the reply stays as it is while other requests move on
+            "board": dict(board.board),
             "board_size": {"size": board.size, "z_min": board.z_min, "z_max": board.z_max},
             "status": status,
             "winner": winner,
@@ -106,7 +123,7 @@ class GameManager:
             "clock": self.clock.to_json() if self.clock is not None else None,
             "computer": dict(self.computer) if self.computer is not None else None,
             "pending_promotion": self.game.pending_promotion,
-            "move_history": self.game.move_history
+            "move_history": [dict(move) for move in self.game.move_history]
         }
 
     def _error_response(self, error):
@@ -117,6 +134,7 @@ class GameManager:
 
     # ==================== GAME SETUP ====================
 
+    @locked
     def new_game(self, rocks=True, move_limit=50, clock=None, computer=None):
         """clock: None for an untimed game, or {"initial": seconds, "increment": seconds}
         computer: None for two human players, or {"color": "black", "level": "easy" | "medium" | "hard"}"""
@@ -164,14 +182,17 @@ class GameManager:
         """Note on the last history entry whether that move gave check or checkmate (for move notation)"""
         if self.game.move_history and self.game.pending_promotion is None:
             status = response["status"]
-            self.game.move_history[-1]["check"] = status if status in ("check", "checkmate") else None
+            check = status if status in ("check", "checkmate") else None
+            self.game.move_history[-1]["check"] = response["move_history"][-1]["check"] = check
         return response
 
     # ==================== QUERIES (READ-ONLY) ====================
 
+    @locked
     def get_state(self):
         return self._state_response()
 
+    @locked
     def get_legal_moves(self, from_coord):
         try:
             piece = self.game.get_board_state().get_piece(from_coord)
@@ -207,6 +228,7 @@ class GameManager:
     def _computer_to_move(self):
         return self.computer is not None and self.game.current_player == self.computer["color"]
 
+    @locked
     def make_move(self, from_coord, to_coord, by_computer=False):
         try:
             self._require_ongoing()
@@ -226,6 +248,7 @@ class GameManager:
         except ValueError as e:
             return self._error_response(e)
 
+    @locked
     def promote_pawn(self, coord, new_piece, by_computer=False):
         try:
             self._require_ongoing()
@@ -246,41 +269,48 @@ class GameManager:
         """Let the computer think and play its move. The thinking takes seconds and the game
         may change meanwhile (undo, new game); a move for a position that is gone is dropped."""
         try:
-            self._require_ongoing()
-            if self.computer is None:
-                raise ValueError("This game has no computer player")
-            if not self._computer_to_move() or self.game.pending_promotion is not None:
-                raise ValueError("It is not the computer's turn")
-            version = self._version
-            if self._thinking_about == version:
-                raise ValueError("The computer is already thinking")
-
-            color, level = self.computer["color"], self.computer["level"]
-            clock_left = self.clock.time_left(color) if self.clock is not None else None
-            increment = self.clock.increment if self.clock is not None else 0
-            self._thinking_about = version
-            try:
-                thought = self._think(self.game, level, think_time(level, clock_left, increment))
-            finally:
+            with self.lock:
+                self._require_ongoing()
+                if self.computer is None:
+                    raise ValueError("This game has no computer player")
+                if not self._computer_to_move() or self.game.pending_promotion is not None:
+                    raise ValueError("It is not the computer's turn")
+                version = self._version
                 if self._thinking_about == version:
-                    self._thinking_about = None
+                    raise ValueError("The computer is already thinking")
 
-            if self._version != version:
-                raise ValueError("The position changed while the computer was thinking")
-            if thought is None:
-                raise ValueError("The computer has no legal move")
+                color, level = self.computer["color"], self.computer["level"]
+                clock_left = self.clock.time_left(color) if self.clock is not None else None
+                increment = self.clock.increment if self.clock is not None else 0
+                self._thinking_about = version
+                position = copy.deepcopy(self.game)   # its own copy: the game stays free meanwhile
 
-            response = self.make_move(thought["from"], thought["to"], by_computer=True)
-            if response["success"] and self.game.pending_promotion is not None:
-                piece = PIECE_CLASSES[thought["promotion"] or "Queen"](color)
-                response = self.promote_pawn(thought["to"], piece, by_computer=True)
-            response["thought"] = {key: thought[key] for key in ("score", "depth", "nodes", "seconds", "mate_in")}
-            return response
+            try:
+                thought = self._think(position, level, think_time(level, clock_left, increment))
+            finally:
+                with self.lock:
+                    if self._thinking_about == version:
+                        self._thinking_about = None
+
+            with self.lock:
+                if self._version != version:
+                    raise ValueError("The position changed while the computer was thinking")
+                if thought is None:
+                    raise ValueError("The computer has no legal move")
+
+                response = self.make_move(thought["from"], thought["to"], by_computer=True)
+                if response["success"] and self.game.pending_promotion is not None:
+                    piece = PIECE_CLASSES[thought["promotion"] or "Queen"](color)
+                    response = self.promote_pawn(thought["to"], piece, by_computer=True)
+                response["thought"] = {key: thought[key] for key in ("score", "depth", "nodes", "seconds", "mate_in")}
+                return response
         except ValueError as e:
-            return self._error_response(e)
+            with self.lock:
+                return self._error_response(e)
 
     # ==================== ENDING THE GAME BY CHOICE ====================
 
+    @locked
     def resign(self, color=None):
         try:
             if color is None:
@@ -295,6 +325,7 @@ class GameManager:
         except ValueError as e:
             return self._error_response(e)
 
+    @locked
     def agree_draw(self):
         """Both players agree to a draw. Against the computer this is an offer it may decline."""
         try:
@@ -311,6 +342,7 @@ class GameManager:
 
     # ==================== RECOVERY ====================
 
+    @locked
     def undo_move(self):
         """Take back the last turn. Also reopens a game that ended by resignation, agreement or timeout,
         and puts the clocks back to where they were before that turn. Against the computer its
@@ -364,6 +396,7 @@ class GameManager:
         if piece is not None:
             board.set_piece(piece, coord)
 
+    @locked
     def setup_position(self, pieces, current_player="white", rocks=True, size=8, z_min=-2, z_max=2):
         """Replace the whole position. pieces: list of {"coord", "type", "color"} ("Rock" needs no color).
         size/z_min/z_max choose the board: 8, -2, 2 is the full board; lessons use 5, -1, 1."""
@@ -392,6 +425,7 @@ class GameManager:
         except ValueError as e:
             return self._error_response(e)
 
+    @locked
     def place_piece(self, coord, piece_type, color):
         try:
             self._set_square(coord, self._create_piece(piece_type, color, coord, self.game.board.size))
@@ -401,6 +435,7 @@ class GameManager:
         except ValueError as e:
             return self._error_response(e)
 
+    @locked
     def remove_piece(self, coord):
         try:
             self._set_square(coord, None)
@@ -410,6 +445,7 @@ class GameManager:
         except ValueError as e:
             return self._error_response(e)
 
+    @locked
     def set_turn(self, player):
         try:
             if player not in ("white", "black"):
@@ -423,6 +459,7 @@ class GameManager:
         except ValueError as e:
             return self._error_response(e)
 
+    @locked
     def set_rocks(self, enabled):
         board = self.game.get_board_state()
         for coord, piece in list(board.board.items()):

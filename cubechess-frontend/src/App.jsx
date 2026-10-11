@@ -1,4 +1,5 @@
 import { lazy, Suspense } from 'react'
+import { lastGame } from './lib/api.js'
 import { useRoute } from './lib/router.js'
 import Game from './pages/Game.jsx'
 import Home from './pages/Home.jsx'
@@ -14,7 +15,12 @@ export default function App() {
   const route = useRoute()
 
   if (route === '/setup') return <Setup />
-  if (route === '/game') return <Game />
+  if (route.startsWith('/game')) {
+    // Every game has its own address; a bare #/game goes back to the one last played here
+    const id = route.split('/')[2] ?? lastGame()
+    if (!id) return <Setup />
+    return <Game key={id} id={id} />
+  }
   if (route === '/learn') return <Learn />
   if (route.startsWith('/scenarios')) return <Scenarios id={route.split('/')[2]} />
   if (route === '/bench') {

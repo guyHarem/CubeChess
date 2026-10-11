@@ -1,7 +1,7 @@
 // Game setup choices. Kept for the browser tab only: nothing is saved between visits yet.
 
 export const DEFAULT_SETTINGS = {
-  opponent: 'local', // 'local' (two players on this screen) or 'computer'
+  opponent: 'local', // 'local' (two players on this screen), 'computer' or 'online'
   level: 'medium', // the computer's level
   side: 'white', // which colour sits nearest the camera; against the computer, the side you play
   rocks: true,

@@ -7,6 +7,7 @@ import Logo from '../components/Logo.jsx'
 import MoveList from '../components/MoveList.jsx'
 import PlayerCard from '../components/PlayerCard.jsx'
 import { FULL_BOARD, LAYERS, capturedBy, capturedPoints, keyOf, layerOf, layersOf, otherColor, parsePiece } from '../lib/chess.js'
+import { navigate } from '../lib/router.js'
 import { clockRequest, computerRequest, levelName, loadSettings } from '../lib/settings.js'
 import { useGame } from '../lib/useGame.js'
 
@@ -17,11 +18,15 @@ const PROMOTIONS = ['Queen', 'Rook', 'Bishop', 'Knight']
 function outcomeOf(game) {
   if (!game) return null
   const computer = game.computer?.color
-  // "White", or against the computer "You" / "The computer", with the verb form that goes with it
-  const who = (color) => (!computer ? NAMES[color] : color === computer ? 'The computer' : 'You')
-  const has = (color) => (computer && color !== computer ? 'have' : 'has')
-  const is = (color) => (computer && color !== computer ? 'are' : 'is')
-  const wins = !game.winner ? 'Draw' : !computer ? `${NAMES[game.winner]} wins` : game.winner === computer ? 'The computer wins' : 'You win'
+  const you = computer ? otherColor(computer) : game.online?.you
+  const rival = computer ? 'The computer' : 'Your opponent'
+  // "White" when both sides are on this screen (or we are watching); otherwise "You" and
+  // "The computer" / "Your opponent", with the verb form that goes with each
+  const who = (color) => (!you ? NAMES[color] : color === you ? 'You' : rival)
+  const has = (color) => (you && color === you ? 'have' : 'has')
+  const is = (color) => (you && color === you ? 'are' : 'is')
+  const lower = (name) => name.replace('The', 'the').replace('You', 'you')
+  const wins = !game.winner ? 'Draw' : !you ? `${NAMES[game.winner]} wins` : game.winner === you ? 'You win' : `${rival} wins`
   if (game.status === 'checkmate') return { title: wins, detail: 'Checkmate.' }
   if (game.status === 'resigned') return { title: wins, detail: `${who(otherColor(game.winner))} resigned.` }
   if (game.status === 'timeout') {
@@ -30,7 +35,7 @@ function outcomeOf(game) {
     const late = game.current_player
     return {
       title: 'Draw',
-      detail: `${who(late)} ran out of time, but ${who(otherColor(late)).replace('The', 'the').replace('You', 'you')} ${has(otherColor(late))} too few pieces to checkmate.`,
+      detail: `${who(late)} ran out of time, but ${lower(who(otherColor(late)))} ${has(otherColor(late))} too few pieces to checkmate.`,
     }
   }
   if (game.status === 'agreed_draw') {
@@ -46,11 +51,13 @@ function outcomeOf(game) {
   return game.draw_reason ? { title: 'Draw', detail: reasons[game.draw_reason] } : null
 }
 
-export default function Game() {
-  const { game, selected, legalMoves, error, clickCell, newGame, undo, promote, resign, agreeDraw, refresh, computerMove } =
-    useGame()
+export default function Game({ id }) {
+  const {
+    game, selected, legalMoves, error, gone, clickCell, newGame, undo, promote, resign, agreeDraw, refresh, computerMove,
+    offer, answer,
+  } = useGame(id)
   const [settings] = useState(loadSettings)
-  const [side, setSide] = useState(settings.side)
+  const [flipped, setFlipped] = useState(false)
   const [activeLayer, setActiveLayer] = useState(0)
   const [spread, setSpread] = useState(false)
   const [solo, setSolo] = useState(false)
@@ -59,6 +66,9 @@ export default function Game() {
   const [resultSeen, setResultSeen] = useState(false)
   const [declined, setDeclined] = useState(null) // number of moves played when the computer said no to a draw
   const [attempt, setAttempt] = useState(0)
+  const [seenMoves, setSeenMoves] = useState(0)
+  const [inviteClosed, setInviteClosed] = useState(false)
+  const [copied, setCopied] = useState(false)
   const waiting = useRef(false)
 
   const board = game?.board ?? {}
@@ -68,6 +78,18 @@ export default function Game() {
   const computer = game?.computer ?? null
   const human = computer ? otherColor(computer.color) : null
   const computerTurn = !!computer && !outcome && player === computer.color && !game.pending_promotion
+  // An online game: which color is ours (null when watching), and what the other player is up to
+  const online = game?.online ?? null
+  const you = online?.you ?? null
+  const rival = you ? otherColor(you) : null
+  const watching = !!online && !you
+  const friendMissing = !!online && !(online.seats.white && online.seats.black)
+  const theirOffer = online?.offer && you && online.offer.by !== you ? online.offer : null
+  const myOffer = online?.offer && online.offer.by === you ? online.offer : null
+  const link = `${window.location.origin}${window.location.pathname}#/game/${id}`
+  // Our side sits nearest the camera, unless the view has been flipped
+  const mine = you ?? human ?? settings.side
+  const side = flipped ? otherColor(mine) : mine
   // The move just played, for the marker on the board (a promotion is recorded after its pawn move)
   const lastEntry = [...history].reverse().find((entry) => entry.special_move !== 'promotion')
   const lastMove = lastEntry ? { from: lastEntry.from, to: lastEntry.to } : null
@@ -77,6 +99,13 @@ export default function Game() {
   const layers = game?.board_size ? layersOf(game.board_size) : FULL_BOARD.layers
   const shownLayer = layers.includes(activeLayer) ? activeLayer : 0
   const quiet = game ? Math.floor(game.halfmove_clock / 2) : 0
+
+  // When the computer or the online opponent moves, bring the layer it moved to forward
+  if (history.length !== seenMoves) {
+    setSeenMoves(history.length)
+    const mover = parsePiece(lastEntry?.moving_piece)?.color
+    if (lastEntry && mover === (computer?.color ?? rival)) setActiveLayer(lastEntry.to[2])
+  }
 
   const send = (type, direction) => setCommand({ id: Date.now(), type, direction })
 
@@ -90,8 +119,6 @@ export default function Game() {
       const data = await computerMove()
       waiting.current = false
       if (data?.success) {
-        const played = [...data.move_history].reverse().find((entry) => entry.special_move !== 'promotion')
-        if (played) setActiveLayer(played.to[2]) // bring the layer it moved to forward
         setAttempt((count) => count + 1)
       } else {
         setTimeout(() => setAttempt((count) => count + 1), data ? 300 : 3000)
@@ -101,7 +128,7 @@ export default function Game() {
   }, [computerTurn, history.length, attempt, computerMove])
 
   function onCellClick(coord) {
-    if (outcome || computerTurn) return
+    if (outcome || computerTurn || (online && you !== player)) return
     // Picking up a piece on another layer brings that layer forward
     const piece = parsePiece(board[keyOf(coord)])
     const isTarget = legalMoves.some((move) => keyOf(move) === keyOf(coord))
@@ -110,6 +137,10 @@ export default function Game() {
   }
 
   function restart() {
+    if (online) {
+      navigate('/setup') // an online game is replayed by making a new one and sending its link
+      return
+    }
     setResultSeen(false)
     setAsking(null)
     newGame({
@@ -122,25 +153,77 @@ export default function Game() {
 
   async function offerDraw() {
     setAsking(null)
+    if (online) {
+      offer('draw')
+      return
+    }
     const data = await agreeDraw()
     if (data?.draw_declined) setDeclined(data.move_history.length)
   }
 
   function takeBack() {
     setResultSeen(false)
-    undo()
+    if (online) offer('takeback')
+    else undo()
+  }
+
+  async function copyLink() {
+    try {
+      await navigator.clipboard.writeText(link)
+      setCopied(true)
+    } catch {
+      setCopied(false) // the link is on screen to select by hand
+    }
   }
 
   const nameOf = (color) => {
-    if (!computer) return color === 'white' ? 'Player 1' : 'Player 2'
-    return color === computer.color ? `Computer, ${levelName(computer.level)}` : 'You'
+    if (computer) return color === computer.color ? `Computer, ${levelName(computer.level)}` : 'You'
+    if (!online) return color === 'white' ? 'Player 1' : 'Player 2'
+    if (color === you) return 'You'
+    if (!online.seats[color]) return 'Waiting to join'
+    const label = watching ? 'Player' : 'Opponent'
+    return online.connected[color] ? label : `${label}, not connected`
   }
   const noteOf = (color) => {
     if (outcome || player !== color) return undefined
     if (color === computer?.color) return 'Thinking'
+    if (online && color !== you) {
+      if (!online.seats[color]) return 'Waiting to join'
+      return `${watching ? 'To move' : 'Their move'}${online.connected[color] ? '' : ', not connected'}`
+    }
     return game?.status === 'check' ? 'Your move, in check' : undefined
   }
-  const turnText = !computer ? `${NAMES[player]} to move` : computerTurn ? 'The computer is thinking' : 'Your move'
+  let turnText = `${NAMES[player]} to move`
+  if (computer) turnText = computerTurn ? 'The computer is thinking' : 'Your move'
+  else if (online && friendMissing && !watching) turnText = 'Waiting for your friend to join'
+  else if (online && !watching) turnText = you === player ? 'Your move' : "Your opponent's move"
+
+  // You can ask to take a move back once you have made one
+  const myMoves = history.filter((entry) => parsePiece(entry.moving_piece)?.color === you).length
+  const undoDisabled = online
+    ? watching || !!outcome || !!online.offer || myMoves === 0
+    : !settings.allowUndo || history.length === 0
+  const offerDisabled = !!outcome || watching || !!online?.offer
+
+  if (gone) {
+    return (
+      <div className="page">
+        <header className="bar">
+          <Logo />
+          <a className="bar-link" href="#/">
+            Back to home
+          </a>
+        </header>
+        <main className="soon">
+          <h1>This game is no longer here</h1>
+          <p>Games are kept for a day after their last move, and are lost if the server restarts.</p>
+          <a className="button button-primary" href="#/setup">
+            Set up a new game
+          </a>
+        </main>
+      </div>
+    )
+  }
 
   const card = (color) => (
     <PlayerCard
@@ -180,16 +263,16 @@ export default function Game() {
 
           <div className="game-actions">
             <div className="button-grid">
-              <button type="button" className="button" disabled={!settings.allowUndo || history.length === 0} onClick={takeBack}>
-                Undo move
+              <button type="button" className="button" disabled={undoDisabled} onClick={takeBack}>
+                {online ? 'Ask to take back' : 'Undo move'}
               </button>
-              <button type="button" className="button" disabled={!!outcome} onClick={() => setAsking('draw')}>
+              <button type="button" className="button" disabled={offerDisabled} onClick={() => setAsking('draw')}>
                 Offer draw
               </button>
-              <button type="button" className="button" disabled={!!outcome} onClick={() => setAsking('resign')}>
+              <button type="button" className="button" disabled={!!outcome || watching} onClick={() => setAsking('resign')}>
                 Resign
               </button>
-              <button type="button" className="button" onClick={() => setSide(otherColor(side))}>
+              <button type="button" className="button" onClick={() => setFlipped(!flipped)}>
                 Flip side
               </button>
             </div>
@@ -198,6 +281,24 @@ export default function Game() {
               nobody captures or moves a pawn.
             </p>
             {declined === history.length && !outcome && <p className="banner-note">The computer declines the draw.</p>}
+            {watching && <p className="banner-note">You are watching this game.</p>}
+            {myOffer && !outcome && (
+              <p className="banner-note">
+                {myOffer.kind === 'draw' ? 'You offered a draw.' : 'You asked to take your move back.'} Waiting for an
+                answer.{' '}
+                <button type="button" className="link-button" onClick={() => answer(false)}>
+                  Withdraw
+                </button>
+              </p>
+            )}
+            {online && friendMissing && !watching && inviteClosed && (
+              <p className="banner-note">
+                Your friend has not joined yet.{' '}
+                <button type="button" className="link-button" onClick={() => setInviteClosed(false)}>
+                  Show the link
+                </button>
+              </p>
+            )}
             {error && <p className="banner-error">{error}</p>}
           </div>
 
@@ -238,7 +339,50 @@ export default function Game() {
               onCellClick={onCellClick}
             />
 
-            {game?.pending_promotion && player !== computer?.color && (
+            {online && friendMissing && !watching && !inviteClosed && (
+              <Dialog
+                title="Invite your friend"
+                actions={
+                  <>
+                    <button type="button" className="button button-primary" onClick={copyLink}>
+                      {copied ? 'Copied' : 'Copy link'}
+                    </button>
+                    <button type="button" className="button" onClick={() => setInviteClosed(true)}>
+                      Close
+                    </button>
+                  </>
+                }
+              >
+                <p>Send this link. Whoever opens it first plays {NAMES[rival]}; anyone after that can watch.</p>
+                <input className="invite-link" readOnly value={link} aria-label="Game link" onFocus={(event) => event.target.select()} />
+              </Dialog>
+            )}
+
+            {theirOffer && !outcome && (
+              <Dialog
+                title={theirOffer.kind === 'draw' ? 'Your opponent offers a draw' : 'Your opponent asks to take a move back'}
+                actions={
+                  <>
+                    <button type="button" className="button button-primary" onClick={() => answer(true)}>
+                      {theirOffer.kind === 'draw' ? 'Accept draw' : 'Allow it'}
+                    </button>
+                    <button type="button" className="button" onClick={() => answer(false)}>
+                      {theirOffer.kind === 'draw' ? 'Decline' : 'Refuse'}
+                    </button>
+                  </>
+                }
+              >
+                <p>
+                  {theirOffer.kind === 'draw'
+                    ? 'If you accept, the game ends as a draw.'
+                    : player === you
+                      ? 'Their last move and your reply would both be taken back.'
+                      : 'Their last move would be taken back.'}
+                </p>
+              </Dialog>
+            )}
+
+            {game?.pending_promotion && player !== computer?.color && (!online || player === you) && (
               <Dialog
                 title="Promote your pawn"
                 actions={PROMOTIONS.map((type) => (
@@ -253,7 +397,7 @@ export default function Game() {
 
             {asking === 'resign' && (
               <Dialog
-                title={computer ? 'Resign this game?' : `${NAMES[player]}, resign this game?`}
+                title={computer || online ? 'Resign this game?' : `${NAMES[player]}, resign this game?`}
                 actions={
                   <>
                     <button
@@ -272,11 +416,31 @@ export default function Game() {
                   </>
                 }
               >
-                <p>{computer ? 'The computer will win.' : `${NAMES[otherColor(player)]} will win.`}</p>
+                <p>
+                  {computer ? 'The computer will win.' : online ? 'Your opponent will win.' : `${NAMES[otherColor(player)]} will win.`}
+                </p>
               </Dialog>
             )}
 
-            {asking === 'draw' && !computer && (
+            {asking === 'draw' && online && (
+              <Dialog
+                title="Offer your opponent a draw?"
+                actions={
+                  <>
+                    <button type="button" className="button button-primary" onClick={offerDraw}>
+                      Offer draw
+                    </button>
+                    <button type="button" className="button" onClick={() => setAsking(null)}>
+                      Keep playing
+                    </button>
+                  </>
+                }
+              >
+                <p>They can accept or decline. Making a move declines it.</p>
+              </Dialog>
+            )}
+
+            {asking === 'draw' && !computer && !online && (
               <Dialog
                 title={`${NAMES[player]} offers a draw`}
                 actions={
