@@ -260,7 +260,9 @@ class TestCorneringTheKing(unittest.TestCase):
                                                        queen: Queen("white"), (0, 6, 2): Rook("black")})).score
         # Both squares are on the same layer and reach the same number of squares
         far, near = score((1, 1, 0)), score((6, 6, 0))
-        self.assertEqual(near - far, 61 * 2)   # two steps from the king against four or more
+        # Two steps from the king against four or more: two steps of closeness
+        self.assertEqual(near - far, round(DEFAULT_PARAMS["near_queen"] * 2))
+        self.assertGreater(near, far)
 
     def test_two_queens_mate_a_bare_king(self):
         game = position({(4, 0, 0): King("white"), (4, 7, 2): King("black"),

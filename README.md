@@ -104,8 +104,8 @@ The computer is not trained; it plays like a classic chess program (`ai/`):
 3. It scores the positions it reaches (`ai/evaluate.py`) by material, by where each piece
    stands, and by how close its pieces are to the enemy king. Against a bare king it also
    scores cornering: the fewer squares that king can step to and the closer the attacker's
-   own king, the better. The numbers were tuned by self-play: pawn 1, knight 3.3, bishop 4,
-   rook 4.1, queen 12.2, and a pawn two steps from promotion is worth about 4.
+   own king, the better. The numbers were tuned by self-play: pawn 1, knight 3.3, bishop 3.7,
+   rook 4.25, queen 12.2, and a pawn two steps from promotion is worth about 4.
 
 | Level | Looks ahead | Picks |
 |---|---|---|
@@ -119,11 +119,13 @@ positions with each game's result), `fit` (find the parameters whose score best 
 who won) and `match` (the new numbers play the current ones; keep them only if they win).
 Three rounds of 2,000 games have been run. Round one beat the first guesses 228-23 with 49
 draws, round two beat round one 253-196 with 151 draws, and round three (with the king terms
-added) beat round two 160-73 with 67 draws.
+added) beat round two 160-73 with 67 draws. A fourth round, after the king's capture rule and
+the extra knights and bishops were added, beat the old numbers 130-93 with 77 draws.
 
 `python tools/endgames.py` measures how often the computer mates a bare king from random
 positions with a queen, two rooks and so on. Before the cornering terms it managed 11 of 128;
-now it manages 102 of 160. Two rooks, or rook, bishop and knight, still usually fail.
+under the current rules it manages 83 of 128. Two rooks, or rook, bishop and knight, still
+usually fail.
 
 `python tools/play_match.py` plays the levels against each other (hard beat medium 40-0 and
 medium beat easy 20-0), and is the way to check that a change makes the computer stronger.

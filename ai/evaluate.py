@@ -12,33 +12,33 @@ the parameters to who won.
 """
 from ai.tables import PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING, ROCK, BLACK
 
-# Tuned by self-play (tools/tune.py), three rounds of 2,000 games. Each round had to win a
-# 300-game match before it was kept: round one beat the first guesses 228-23 (49 draws),
-# round two beat round one 253-196 (151 draws, over 600 games), round three beat round two
-# plus the hand-set king terms 160-73 (67 draws). The starting guesses came from how many
-# squares each piece reaches on an empty board compared with ordinary chess; FIRST_GUESSES
-# keeps them.
+# Tuned by self-play (tools/tune.py), 2,000 games a round. Each round had to win a 300-game
+# match before it was kept. Three rounds under the first rules (228-23, 253-196 over 600
+# games, 160-73), then one more after the king's capture rule and the extra knights and
+# bishops came in, which beat the old numbers 130-93 with 77 draws.
+# The starting guesses came from how many squares each piece reaches on an empty board
+# compared with ordinary chess; FIRST_GUESSES keeps them.
 DEFAULT_PARAMS = {
     # What a piece is worth (the pawn is the fixed yardstick)
-    "pawn": 100, "knight": 334, "bishop": 395, "rook": 406, "queen": 1220,
+    "pawn": 100, "knight": 327, "bishop": 369, "rook": 425, "queen": 1215,
     # ... plus this much for each square it could reach, above its average. (A rook reaches
     # the same number of squares from everywhere, so it has no such term.)
-    "reach_knight": 7.28, "reach_bishop": -1.24, "reach_queen": 1.38,
+    "reach_knight": 9.15, "reach_bishop": -0.27, "reach_queen": -3.55,
     # ... plus this much for each layer it stands away from the Ground
-    "layer_knight": -12.28, "layer_bishop": -9.4, "layer_rook": -24.0, "layer_queen": 8.75,
+    "layer_knight": 3.59, "layer_bishop": -11.48, "layer_rook": 11.56, "layer_queen": 6.08,
     # A pawn that has advanced 1, 2, ... ranks (5 = one step from promotion on the full board)
-    "pawn_advance_1": 7.15, "pawn_advance_2": 27, "pawn_advance_3": 101, "pawn_advance_4": 304, "pawn_advance_5": 294,
-    "pawn_central": 2.62,    # scales the bonus for central pawns stepping forward
-    "pawn_layer": 10.54,     # per layer away from the Ground, until the pawn is far advanced
+    "pawn_advance_1": 8.5, "pawn_advance_2": 41, "pawn_advance_3": 92, "pawn_advance_4": 298, "pawn_advance_5": 340,
+    "pawn_central": 1.66,    # scales the bonus for central pawns stepping forward
+    "pawn_layer": 15.69,     # per layer away from the Ground, until the pawn is far advanced
     # King: per rank it has left its back rank (up to 4), and per layer away from the Ground
-    "king_rank": -1.89, "king_layer": 15.79,
+    "king_rank": -11.22, "king_layer": -17.18,
     # ... and per square it could step to from where it stands (4 in a corner of the top or
     # bottom layer, 10 in the open)
-    "king_freedom": -0.98,
+    "king_freedom": -4.67,
     # Closing in on the enemy king: per step of closeness (3 next to it, 2, 1, then nothing).
-    # The fit wanted the pawn, bishop and rook below zero; zero plays full games just as well
-    # (117-109 with 74 draws) and finishes off a bare king more often.
-    "near_pawn": 0.0, "near_knight": 4.31, "near_bishop": 0.0, "near_rook": 0.0, "near_queen": 61.0,
+    # The fit wants the bishop and rook below zero; zero plays full games just as well and
+    # finishes off a bare king more often.
+    "near_pawn": 14.5, "near_knight": 20.0, "near_bishop": 0.0, "near_rook": 0.0, "near_queen": 31.0,
     # Cornering a bare king: per exit square it has lost, and per step our king is closer to
     # it. Set with tools/endgames.py; such endings are too rare in self-play to fit.
     "corner_exits": 70.0, "corner_kings": 35.0,
