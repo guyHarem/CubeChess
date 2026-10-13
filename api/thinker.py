@@ -46,6 +46,7 @@ class ProcessThinker:
         waiting = self.workers * 2 if waiting is None else waiting
         self._places = threading.BoundedSemaphore(self.workers + waiting)
         self._pool = None
+        self._closed = False
 
     def _processes(self):
         if self._pool is None:
@@ -59,13 +60,23 @@ class ProcessThinker:
         except Exception:
             self._pool = None
 
+    def close(self):
+        """Stop the workers, for when the server shuts down. Left alone they would live on
+        after it, each still holding memory."""
+        self._closed = True
+        pool, self._pool = self._pool, None
+        if pool is not None:
+            pool.terminate_workers()
+
     def __call__(self, game, level, seconds):
-        if not self._places.acquire(blocking=False):
+        if self._closed or not self._places.acquire(blocking=False):
             raise Busy("The computer is busy with other games. It will move in a moment.")
         try:
             try:
                 return self._processes().submit(think, game, level, seconds).result()
             except Exception:
+                if self._closed:
+                    raise Busy("The server is shutting down.")
                 # A broken worker must not stop the game: forget it and think right here
                 self._pool = None
                 return think(game, level, seconds)

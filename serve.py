@@ -9,32 +9,51 @@ Settings (environment variables):
     HOST                    address to listen on (default 0.0.0.0: reachable from other machines)
     CUBECHESS_THINKERS      computer moves thought about at the same time, one CPU core each
                             (default: the number of cores minus one, at most 4)
-    CUBECHESS_TRUST_PROXY   set to 0 when no proxy stands in front of this server; otherwise
-                            the visitor's address is read from the proxy's X-Forwarded-For
+    CUBECHESS_TRUST_PROXY   how many proxies stand in front of this server (default 1; 0 for
+                            none). The visitor's address is read that many entries from the
+                            end of X-Forwarded-For. Check it at /api/health, which shows the
+                            address the server takes you for
 
 The server is a single process on purpose: games live in its memory, so two processes would
 each have their own set. Restarting it ends the games in progress.
 """
 import os
+import signal
 
 os.environ["CUBECHESS_ENV"] = "production"   # must be set before api.app is imported
 
-if __name__ == "__main__":
+
+def start(host, port, thinkers=None):
+    """Serve pages and API until the program is told to stop"""
     from waitress import serve
 
     from api.app import app, rooms
     from api.thinker import ProcessThinker, default_workers
 
-    if not os.path.isfile(os.path.join(app.config["DIST"], "index.html")):
-        raise SystemExit("The pages are not built yet. Run: npm --prefix cubechess-frontend run build")
-
-    workers = int(os.environ.get("CUBECHESS_THINKERS", default_workers()))
+    workers = thinkers or default_workers()
     thinker = ProcessThinker(workers=workers)
     rooms.set_thinker(thinker)
     thinker.warm_up()
 
-    host = os.environ.get("HOST", "0.0.0.0")
-    port = int(os.environ.get("PORT", 8000))
+    def stop(*_):
+        raise SystemExit(0)
+    signal.signal(signal.SIGTERM, stop)   # how a host stops the server; waitress then winds down
+
     print(f"Serving on http://{host}:{port} with {workers} computer thinker(s)", flush=True)
-    # Plenty of threads: a computer move holds one for seconds while the pages keep asking for news
-    serve(app, host=host, port=port, threads=32, ident=None)
+    try:
+        # Plenty of threads: a computer move holds one for seconds while the pages keep asking
+        # for news. Waitress would strip X-Forwarded-For as coming from an unknown proxy;
+        # api.app needs it to tell visitors apart, and decides itself how far to trust it.
+        serve(app, host=host, port=port, threads=32, ident=None, clear_untrusted_proxy_headers=False)
+    finally:
+        thinker.close()
+
+
+if __name__ == "__main__":
+    from api.app import app
+
+    if not os.path.isfile(os.path.join(app.config["DIST"], "index.html")):
+        raise SystemExit("The pages are not built yet. Run: npm --prefix cubechess-frontend run build")
+
+    start(os.environ.get("HOST", "0.0.0.0"), int(os.environ.get("PORT", 8000)),
+          thinkers=int(os.environ.get("CUBECHESS_THINKERS", 0)))

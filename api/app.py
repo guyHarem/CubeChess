@@ -33,9 +33,14 @@ app.config.update(
 )
 if not PRODUCTION:
     CORS(app)   # the dev pages come from another port; hosted, pages and API share one address
-elif os.environ.get("CUBECHESS_TRUST_PROXY", "1") != "0":
-    # Hosting providers put a proxy in front, which passes the visitor's address along
-    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1)
+else:
+    # Hosting providers put proxies in front. Each adds the address it heard from to the end
+    # of X-Forwarded-For, so with N proxies the visitor is the Nth entry from the end;
+    # anything before that was sent by the visitor and proves nothing. N differs per host
+    # (Render: 3, see render.yaml). /api/health shows the address this arrives at.
+    PROXIES = int(os.environ.get("CUBECHESS_TRUST_PROXY", "1"))
+    if PROXIES > 0:
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=PROXIES)
 
 # Per visitor, hosted mode only
 limits = {
@@ -388,7 +393,11 @@ def no_sandbox_online():
 
 @app.route('/api/health')
 def health():
-    """For a hosting provider to check that the server is up"""
+    """For a hosting provider to check that the server is up. Hosted, it also says which
+    address it takes the caller for: that is how to check CUBECHESS_TRUST_PROXY on a new
+    host, since the limits per visitor go by this address."""
+    if hosted():
+        return jsonify({"success": True, "visitor": visitor()})
     return jsonify({"success": True})
 
 

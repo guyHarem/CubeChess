@@ -1,0 +1,38 @@
+# Setup for hosting on Render (render.com). In the Render dashboard: New > Blueprint, pick
+# this repository, and Render creates the service described here.
+#
+# One service runs everything: it builds the pages, then serve.py serves pages and API.
+# Keep it at one instance: games live in the server's memory (see serve.py).
+services:
+  - type: web
+    name: cubechess
+    runtime: python
+    # Half a CPU core and 512 MB. The free plan will not do: it sleeps after 15 idle minutes,
+    # which ends every game, and has a tenth of a core for the computer player. One step up
+    # (standard: one core, 2 GB) lets Hard think on a whole core.
+    plan: starter
+    region: frankfurt        # cannot be changed later: oregon, ohio, virginia, frankfurt, singapore
+    branch: main
+    numInstances: 1
+    # A deploy restarts the server and ends the games in progress, so it does not happen on
+    # every push. Deploy from the dashboard: Manual Deploy > Deploy latest commit.
+    autoDeployTrigger: "off"
+    buildCommand: >-
+      pip install -r requirements.txt &&
+      npm --prefix cubechess-frontend ci --include=dev &&
+      npm --prefix cubechess-frontend run build
+    startCommand: python serve.py     # listens on the PORT Render gives it
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.14.7
+      - key: NODE_VERSION            # only used to build the pages
+        value: 24.21.0
+      # The server would guess from the machine's core count, which is the whole shared
+      # machine and not this plan's share. Make it 2 on a plan with two cores or more.
+      - key: CUBECHESS_THINKERS
+        value: "1"
+      # Render has three proxies in front of the service. Check after the first deploy:
+      # /api/health must show your own public address as "visitor".
+      - key: CUBECHESS_TRUST_PROXY
+        value: "3"

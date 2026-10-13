@@ -2,11 +2,16 @@
 Hosted mode: what changes when the game faces the internet (CUBECHESS_ENV=production, serve.py).
 On a developer's machine none of these restrictions apply, which the other test files rely on.
 """
+import json
 import os
+import signal
+import socket
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
+import urllib.request
 
 from api import app as app_module
 from api.app import app, game_manager, rooms
@@ -87,6 +92,9 @@ class TestLockedDown(HostedTestCase):
         self.assertEqual((res.status_code, res.get_json()["board_size"]["size"]), (200, 5))
 
     def test_health_check(self):
+        # ... which also says who the server takes the caller for (the test client's address)
+        self.assertEqual(self.client.get('/api/health').get_json(), {"success": True, "visitor": "127.0.0.1"})
+        app.config["PRODUCTION"] = False
         self.assertEqual(self.client.get('/api/health').get_json(), {"success": True})
 
     def test_nothing_is_locked_on_a_developers_machine(self):
@@ -243,6 +251,68 @@ class TestStartUp(unittest.TestCase):
         # Told not to trust a proxy, everyone arriving through one address counts as one visitor
         self.assertEqual(self.run_python(code, CUBECHESS_ENV="production", CUBECHESS_TRUST_PROXY="0").stdout.strip(),
                          "200 429 429")
+
+    def test_behind_several_proxies_the_visitor_is_counted_from_the_end(self):
+        # What a server on Render receives: whatever the visitor sent, then the visitor's real
+        # address, then two of the host's own proxies
+        code = ("from api import app as m\n"
+                "c = m.app.test_client()\n"
+                "who = lambda chain: c.get('/api/health', headers={'X-Forwarded-For': chain}).get_json()['visitor']\n"
+                "print(who('203.0.113.1, 172.70.0.1, 10.0.0.1'), who('6.6.6.6,203.0.113.2, 172.70.0.1, 10.0.0.1'),"
+                " who('10.0.0.1'))")
+        # (a caller that came past fewer proxies, like the host's own health check, keeps its own address)
+        self.assertEqual(self.run_python(code, CUBECHESS_ENV="production", CUBECHESS_TRUST_PROXY="3").stdout.strip(),
+                         "203.0.113.1 203.0.113.2 127.0.0.1")
+        # With the count too low, every visitor would look like one of the host's proxies
+        self.assertEqual(self.run_python(code, CUBECHESS_ENV="production").stdout.strip(),
+                         "10.0.0.1 10.0.0.1 10.0.0.1")
+
+
+class TestRealServer(unittest.TestCase):
+    """serve.py's own part, through the real web server: the other tests call the app directly"""
+
+    def setUp(self):
+        with socket.socket() as probe:
+            probe.bind(("127.0.0.1", 0))
+            self.port = probe.getsockname()[1]
+        self.server = subprocess.Popen(
+            [sys.executable, "-c", f"import serve; serve.start('127.0.0.1', {self.port}, thinkers=1)"], cwd=ROOT,
+            env={**os.environ, "CUBECHESS_TRUST_PROXY": "3"}, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        self.addCleanup(self.stop)
+
+    def stop(self):
+        if self.server.poll() is None:
+            self.server.terminate()   # not kill(): that would leave its thinker running
+        self.server.wait(timeout=10)
+
+    def health(self, forwarded):
+        request = urllib.request.Request(f"http://127.0.0.1:{self.port}/api/health", headers={"X-Forwarded-For": forwarded})
+        for _ in range(100):
+            try:
+                with urllib.request.urlopen(request, timeout=5) as answer:
+                    return json.loads(answer.read())
+            except OSError:
+                time.sleep(0.1)   # still starting
+        self.fail("The server did not start")
+
+    def test_the_visitors_address_survives_the_web_server(self):
+        # (waitress drops X-Forwarded-For unless told not to; then every visitor shares one limit)
+        self.assertEqual(self.health("203.0.113.1, 172.70.0.1, 10.0.0.1")["visitor"], "203.0.113.1")
+        self.assertEqual(self.health("6.6.6.6,203.0.113.2, 172.70.0.1, 10.0.0.1")["visitor"], "203.0.113.2")
+
+    def test_stopping_the_server_stops_its_thinkers(self):
+        self.health("203.0.113.1, 172.70.0.1, 10.0.0.1")
+        children = [int(pid) for pid in subprocess.run(["pgrep", "-P", str(self.server.pid)],
+                                                       capture_output=True, text=True).stdout.split()]
+        self.assertTrue(children, "the thinker's worker process should be running")
+        self.server.send_signal(signal.SIGTERM)   # how a host stops it
+        self.assertEqual(self.server.wait(timeout=10), 0)
+        for _ in range(50):
+            alive = [pid for pid in children if subprocess.run(["ps", "-p", str(pid)], capture_output=True).returncode == 0]
+            if not alive:
+                break
+            time.sleep(0.1)
+        self.assertEqual(alive, [])
 
 
 if __name__ == '__main__':

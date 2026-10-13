@@ -121,9 +121,28 @@ venv/bin/python serve.py                       # then open http://localhost:8000
 It is a single process on purpose: games live in its memory. Restarting it ends the games in
 progress, and running two copies would give each its own set of games. Settings are
 environment variables: `PORT` (8000), `HOST` (0.0.0.0), `CUBECHESS_THINKERS`, and
-`CUBECHESS_TRUST_PROXY` (set to `0` if no proxy stands in front; otherwise the visitor's
-address is taken from the proxy). `GET /api/health` answers `{"success": true}` for a host's
-health check.
+`CUBECHESS_TRUST_PROXY`: how many proxies stand in front of the server (default 1, `0` for
+none). Each proxy adds the address it heard from to the end of `X-Forwarded-For`, so the
+visitor is that many entries from the end. `GET /api/health` is for a host's health check;
+hosted, it answers `{"success": true, "visitor": "<address>"}` with the address the server
+takes the caller for, which is how to check the proxy count on a new host.
+
+#### On Render
+
+`render.yaml` describes the whole setup for [Render](https://render.com): one Python web
+service that builds the pages and starts `serve.py`.
+
+1. In the Render dashboard choose **New > Blueprint** and pick this repository. Render reads
+   `render.yaml` and creates the service (plan `starter`, region Frankfurt; change them in the
+   file first if you want others, the region cannot be changed afterwards).
+2. When the first deploy is live, open `https://<the service>.onrender.com/api/health`.
+   `visitor` must be your own public address. If it is not, the number of proxies in
+   `CUBECHESS_TRUST_PROXY` is wrong and the limits per visitor would be shared.
+3. Later versions go out when you press **Manual Deploy > Deploy latest commit**. Automatic
+   deploys are off on purpose: a deploy restarts the server, which ends the games in progress.
+
+The file sets one computer thinker, which suits a plan with one core or less; raise
+`CUBECHESS_THINKERS` together with the plan.
 
 ### Computer opponent
 
