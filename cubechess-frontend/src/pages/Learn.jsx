@@ -132,11 +132,15 @@ export default function Learn() {
                 type="button"
                 className={`lesson-link ${state}`}
                 aria-current={index === lessonIndex ? 'step' : undefined}
+                aria-label={`Lesson ${index + 1}: ${item.title}${done.includes(item.id) ? ' (done)' : ''}`}
                 onClick={() => open(index)}
               >
                 <span className="lesson-mark" aria-hidden="true" />
-                {item.title}
-                {done.includes(item.id) && <span className="sr-only"> (done)</span>}
+                {/* On a phone the list is a row of numbers; the title is shown below it */}
+                <span className="lesson-number" aria-hidden="true">
+                  {index + 1}
+                </span>
+                <span className="lesson-title">{item.title}</span>
               </button>
             )
           })}

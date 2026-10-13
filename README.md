@@ -29,6 +29,8 @@ A 3D chess variant on a 5-layer cube board. This is a **work in progress (WIP)**
 - ✅ Scenario player: 32 checkmate puzzles in four tiers (`cubechess-frontend/src/scenarios.json`)
 - ✅ Play against the computer (easy, medium, hard), with the last move marked on the board
 - ✅ Online play with a link: seats without accounts, draw and take-back offers, watching
+- ✅ Phone layout: the game, lessons and puzzles fit one upright phone screen (3D board on top,
+  top view below for tapping, the rest behind a Menu button)
 - ⏳ Hosting (so far it runs on your own machine and network)
 - 🔧 Developer test bench at `#/bench` for checking backend behavior
 

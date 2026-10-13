@@ -10,6 +10,7 @@ import { FULL_BOARD, LAYERS, capturedBy, capturedPoints, keyOf, layerOf, layersO
 import { navigate } from '../lib/router.js'
 import { clockRequest, computerRequest, levelName, loadSettings } from '../lib/settings.js'
 import { useGame } from '../lib/useGame.js'
+import { usePhone } from '../lib/usePhone.js'
 
 const NAMES = { white: 'White', black: 'Black' }
 const PROMOTIONS = ['Queen', 'Rook', 'Bishop', 'Knight']
@@ -69,6 +70,8 @@ export default function Game({ id }) {
   const [seenMoves, setSeenMoves] = useState(0)
   const [inviteClosed, setInviteClosed] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const phone = usePhone()
   const waiting = useRef(false)
 
   const board = game?.board ?? {}
@@ -198,7 +201,7 @@ export default function Game({ id }) {
   }
   let turnText = `${NAMES[player]} to move`
   if (computer) turnText = computerTurn ? 'The computer is thinking' : 'Your move'
-  else if (online && friendMissing && !watching) turnText = 'Waiting for your friend to join'
+  else if (online && friendMissing && !watching) turnText = phone ? 'Waiting for your friend' : 'Waiting for your friend to join'
   else if (online && !watching) turnText = you === player ? 'Your move' : "Your opponent's move"
 
   // You can ask to take a move back once you have made one
@@ -228,8 +231,9 @@ export default function Game({ id }) {
     )
   }
 
-  const card = (color) => (
+  const card = (color, compact = false) => (
     <PlayerCard
+      compact={compact}
       color={color}
       name={nameOf(color)}
       toMove={!outcome && player === color}
@@ -241,298 +245,372 @@ export default function Game({ id }) {
     />
   )
 
+  // The page's parts, arranged one way on a wide screen and another on a phone
+  const turnPill = (
+    <div className={`turn turn-${outcome ? 'over' : player}`} aria-live="polite">
+      {!outcome && <i className={`chip chip-${player}`} />}
+      {outcome ? outcome.title : turnText}
+      {!outcome && game?.status === 'check' && <span className="turn-check">Check</span>}
+    </div>
+  )
+  const barActions = (
+    <div className="bar-actions">
+      <button type="button" className="button" onClick={restart}>
+        New game
+      </button>
+      <a className="button" href="#/">
+        Exit
+      </a>
+    </div>
+  )
+  const actionButtons = (
+    <>
+      <div className="button-grid">
+        <button type="button" className="button" disabled={undoDisabled} onClick={takeBack}>
+          {online ? 'Ask to take back' : 'Undo move'}
+        </button>
+        <button type="button" className="button" disabled={offerDisabled} onClick={() => setAsking('draw')}>
+          Offer draw
+        </button>
+        <button type="button" className="button" disabled={!!outcome || watching} onClick={() => setAsking('resign')}>
+          Resign
+        </button>
+        <button type="button" className="button" onClick={() => setFlipped(!flipped)}>
+          Flip side
+        </button>
+      </div>
+      <p className="quiet">
+        {quiet} of {game?.move_limit ?? settings.moveLimit} quiet moves. The game is drawn at the limit, when
+        nobody captures or moves a pawn.
+      </p>
+    </>
+  )
+  const notices = (
+    <>
+      {declined === history.length && !outcome && <p className="banner-note">The computer declines the draw.</p>}
+      {watching && <p className="banner-note">You are watching this game.</p>}
+      {myOffer && !outcome && (
+        <p className="banner-note">
+          {myOffer.kind === 'draw' ? 'You offered a draw.' : 'You asked to take your move back.'} Waiting for an
+          answer.{' '}
+          <button type="button" className="link-button" onClick={() => answer(false)}>
+            Withdraw
+          </button>
+        </p>
+      )}
+      {online && friendMissing && !watching && inviteClosed && (
+        <p className="banner-note">
+          Your friend has not joined yet.{' '}
+          <button type="button" className="link-button" onClick={() => setInviteClosed(false)}>
+            Show the link
+          </button>
+        </p>
+      )}
+      {error && <p className="banner-error">{error}</p>}
+    </>
+  )
+  const layerPicker = (
+    <div className="layer-picker" role="group" aria-label="Current layer">
+      {LAYERS.filter((layer) => layers.includes(layer.z)).map((layer) => (
+        <button
+          key={layer.z}
+          type="button"
+          className={`button layer-button ${shownLayer === layer.z ? 'is-selected' : ''}`}
+          aria-pressed={shownLayer === layer.z}
+          style={shownLayer === layer.z ? { background: layer.light, borderColor: layer.light } : undefined}
+          onClick={() => setActiveLayer(layer.z)}
+        >
+          <i className="swatch" style={{ background: layer.dark }} />
+          {layer.name}
+        </button>
+      ))}
+    </div>
+  )
+  const boardFrame = (
+    <div className="board-frame">
+      <CubeBoard
+        board={board}
+        size={size}
+        layers={layers}
+        activeLayer={shownLayer}
+        selected={selected}
+        legalMoves={legalMoves}
+        lastMove={lastMove}
+        showMoveBalls={settings.showLegalMoves}
+        spread={spread}
+        solo={solo}
+        side={side}
+        command={command}
+        onCellClick={onCellClick}
+      />
+
+      {online && friendMissing && !watching && !inviteClosed && (
+        <Dialog
+          title="Invite your friend"
+          actions={
+            <>
+              <button type="button" className="button button-primary" onClick={copyLink}>
+                {copied ? 'Copied' : 'Copy link'}
+              </button>
+              <button type="button" className="button" onClick={() => setInviteClosed(true)}>
+                Close
+              </button>
+            </>
+          }
+        >
+          <p>Send this link. Whoever opens it first plays {NAMES[rival]}; anyone after that can watch.</p>
+          <input className="invite-link" readOnly value={link} aria-label="Game link" onFocus={(event) => event.target.select()} />
+        </Dialog>
+      )}
+
+      {theirOffer && !outcome && (
+        <Dialog
+          title={theirOffer.kind === 'draw' ? 'Your opponent offers a draw' : 'Your opponent asks to take a move back'}
+          actions={
+            <>
+              <button type="button" className="button button-primary" onClick={() => answer(true)}>
+                {theirOffer.kind === 'draw' ? 'Accept draw' : 'Allow it'}
+              </button>
+              <button type="button" className="button" onClick={() => answer(false)}>
+                {theirOffer.kind === 'draw' ? 'Decline' : 'Refuse'}
+              </button>
+            </>
+          }
+        >
+          <p>
+            {theirOffer.kind === 'draw'
+              ? 'If you accept, the game ends as a draw.'
+              : player === you
+                ? 'Their last move and your reply would both be taken back.'
+                : 'Their last move would be taken back.'}
+          </p>
+        </Dialog>
+      )}
+
+      {game?.pending_promotion && player !== computer?.color && (!online || player === you) && (
+        <Dialog
+          title="Promote your pawn"
+          actions={PROMOTIONS.map((type) => (
+            <button key={type} type="button" className="button" onClick={() => promote(type)}>
+              {type}
+            </button>
+          ))}
+        >
+          <p>Choose the piece it becomes.</p>
+        </Dialog>
+      )}
+
+      {asking === 'resign' && (
+        <Dialog
+          title={computer || online ? 'Resign this game?' : `${NAMES[player]}, resign this game?`}
+          actions={
+            <>
+              <button
+                type="button"
+                className="button button-danger"
+                onClick={() => {
+                  resign(human ?? player)
+                  setAsking(null)
+                }}
+              >
+                Resign
+              </button>
+              <button type="button" className="button" onClick={() => setAsking(null)}>
+                Keep playing
+              </button>
+            </>
+          }
+        >
+          <p>
+            {computer ? 'The computer will win.' : online ? 'Your opponent will win.' : `${NAMES[otherColor(player)]} will win.`}
+          </p>
+        </Dialog>
+      )}
+
+      {asking === 'draw' && online && (
+        <Dialog
+          title="Offer your opponent a draw?"
+          actions={
+            <>
+              <button type="button" className="button button-primary" onClick={offerDraw}>
+                Offer draw
+              </button>
+              <button type="button" className="button" onClick={() => setAsking(null)}>
+                Keep playing
+              </button>
+            </>
+          }
+        >
+          <p>They can accept or decline. Making a move declines it.</p>
+        </Dialog>
+      )}
+
+      {asking === 'draw' && !computer && !online && (
+        <Dialog
+          title={`${NAMES[player]} offers a draw`}
+          actions={
+            <>
+              <button type="button" className="button button-primary" onClick={offerDraw}>
+                Accept draw
+              </button>
+              <button type="button" className="button" onClick={() => setAsking(null)}>
+                Decline
+              </button>
+            </>
+          }
+        >
+          <p>{NAMES[otherColor(player)]}, do you accept?</p>
+        </Dialog>
+      )}
+
+      {asking === 'draw' && computer && (
+        <Dialog
+          title="Offer the computer a draw?"
+          actions={
+            <>
+              <button type="button" className="button button-primary" onClick={offerDraw}>
+                Offer draw
+              </button>
+              <button type="button" className="button" onClick={() => setAsking(null)}>
+                Keep playing
+              </button>
+            </>
+          }
+        >
+          <p>It accepts when it thinks it is worse, or when a long game is level.</p>
+        </Dialog>
+      )}
+
+      {outcome && !resultSeen && !asking && (
+        <Dialog
+          title={outcome.title}
+          actions={
+            <>
+              <button type="button" className="button button-primary" onClick={restart}>
+                New game
+              </button>
+              <button type="button" className="button" onClick={() => setResultSeen(true)}>
+                Look at the board
+              </button>
+            </>
+          }
+        >
+          <p>{outcome.detail}</p>
+        </Dialog>
+      )}
+    </div>
+  )
+  const viewControls = (
+    <div className="view-controls">
+      <button type="button" className="button" onClick={() => send('turn', -1)}>
+        Turn left
+      </button>
+      <button type="button" className="button" onClick={() => send('turn', 1)}>
+        Turn right
+      </button>
+      <button type="button" className="button" onClick={() => send('reset')}>
+        Reset view
+      </button>
+      <button type="button" className={`button ${spread ? 'is-on' : ''}`} aria-pressed={spread} onClick={() => setSpread(!spread)}>
+        Spread layers
+      </button>
+      <button type="button" className={`button ${solo ? 'is-on' : ''}`} aria-pressed={solo} onClick={() => setSolo(!solo)}>
+        Only this layer
+      </button>
+    </div>
+  )
+  const topView = (
+    <section>
+      <h2>{layerOf(shownLayer).name}, seen from above</h2>
+      <LayerMap
+        board={board}
+        size={size}
+        z={shownLayer}
+        side={side}
+        selected={selected}
+        legalMoves={legalMoves}
+        lastMove={lastMove}
+        showMoves={settings.showLegalMoves}
+        onCellClick={onCellClick}
+      />
+    </section>
+  )
+  const moveList = <MoveList history={history} currentPlayer={player} finished={!!outcome} />
+
+  if (phone) {
+    // One screen, no scrolling: the 3D board for the overview, the top view for tapping,
+    // and everything that is not needed on every move behind the Menu button
+    return (
+      <div className="game is-phone">
+        <header className="bar">
+          <Logo />
+          {turnPill}
+          <button type="button" className="button" aria-haspopup="dialog" onClick={() => setMenuOpen(true)}>
+            Menu
+          </button>
+        </header>
+
+        <main className="phone-main">
+          {card(otherColor(side), true)}
+          <div className="phone-notices">{notices}</div>
+          {boardFrame}
+          {layerPicker}
+          {topView}
+          {card(side, true)}
+        </main>
+
+        {menuOpen && (
+          // Choosing anything in the menu closes it, so the board is back in view
+          <div
+            className="sheet"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Game menu"
+            onClick={(event) => event.target.closest('button, a') && setMenuOpen(false)}
+          >
+            <div className="sheet-head">
+              <h2>Game menu</h2>
+              <button type="button" className="button">
+                Close
+              </button>
+            </div>
+            <div className="game-actions">{actionButtons}</div>
+            {viewControls}
+            {moveList}
+            {barActions}
+          </div>
+        )}
+      </div>
+    )
+  }
+
   return (
     <div className="game">
       <header className="bar">
         <Logo />
-        <div className={`turn turn-${outcome ? 'over' : player}`} aria-live="polite">
-          {!outcome && <i className={`chip chip-${player}`} />}
-          {outcome ? outcome.title : turnText}
-          {!outcome && game?.status === 'check' && <span className="turn-check">Check</span>}
-        </div>
-        <div className="bar-actions">
-          <button type="button" className="button" onClick={restart}>
-            New game
-          </button>
-          <a className="button" href="#/">
-            Exit
-          </a>
-        </div>
+        {turnPill}
+        {barActions}
       </header>
 
       <main className="game-main">
         <aside className="game-left">
           {card(otherColor(side))}
-
           <div className="game-actions">
-            <div className="button-grid">
-              <button type="button" className="button" disabled={undoDisabled} onClick={takeBack}>
-                {online ? 'Ask to take back' : 'Undo move'}
-              </button>
-              <button type="button" className="button" disabled={offerDisabled} onClick={() => setAsking('draw')}>
-                Offer draw
-              </button>
-              <button type="button" className="button" disabled={!!outcome || watching} onClick={() => setAsking('resign')}>
-                Resign
-              </button>
-              <button type="button" className="button" onClick={() => setFlipped(!flipped)}>
-                Flip side
-              </button>
-            </div>
-            <p className="quiet">
-              {quiet} of {game?.move_limit ?? settings.moveLimit} quiet moves. The game is drawn at the limit, when
-              nobody captures or moves a pawn.
-            </p>
-            {declined === history.length && !outcome && <p className="banner-note">The computer declines the draw.</p>}
-            {watching && <p className="banner-note">You are watching this game.</p>}
-            {myOffer && !outcome && (
-              <p className="banner-note">
-                {myOffer.kind === 'draw' ? 'You offered a draw.' : 'You asked to take your move back.'} Waiting for an
-                answer.{' '}
-                <button type="button" className="link-button" onClick={() => answer(false)}>
-                  Withdraw
-                </button>
-              </p>
-            )}
-            {online && friendMissing && !watching && inviteClosed && (
-              <p className="banner-note">
-                Your friend has not joined yet.{' '}
-                <button type="button" className="link-button" onClick={() => setInviteClosed(false)}>
-                  Show the link
-                </button>
-              </p>
-            )}
-            {error && <p className="banner-error">{error}</p>}
+            {actionButtons}
+            {notices}
           </div>
-
           {card(side)}
         </aside>
 
         <section className="game-centre">
-          <div className="layer-picker" role="group" aria-label="Current layer">
-            {LAYERS.filter((layer) => layers.includes(layer.z)).map((layer) => (
-              <button
-                key={layer.z}
-                type="button"
-                className={`button layer-button ${shownLayer === layer.z ? 'is-selected' : ''}`}
-                aria-pressed={shownLayer === layer.z}
-                style={shownLayer === layer.z ? { background: layer.light, borderColor: layer.light } : undefined}
-                onClick={() => setActiveLayer(layer.z)}
-              >
-                <i className="swatch" style={{ background: layer.dark }} />
-                {layer.name}
-              </button>
-            ))}
-          </div>
-
-          <div className="board-frame">
-            <CubeBoard
-              board={board}
-              size={size}
-              layers={layers}
-              activeLayer={shownLayer}
-              selected={selected}
-              legalMoves={legalMoves}
-              lastMove={lastMove}
-              showMoveBalls={settings.showLegalMoves}
-              spread={spread}
-              solo={solo}
-              side={side}
-              command={command}
-              onCellClick={onCellClick}
-            />
-
-            {online && friendMissing && !watching && !inviteClosed && (
-              <Dialog
-                title="Invite your friend"
-                actions={
-                  <>
-                    <button type="button" className="button button-primary" onClick={copyLink}>
-                      {copied ? 'Copied' : 'Copy link'}
-                    </button>
-                    <button type="button" className="button" onClick={() => setInviteClosed(true)}>
-                      Close
-                    </button>
-                  </>
-                }
-              >
-                <p>Send this link. Whoever opens it first plays {NAMES[rival]}; anyone after that can watch.</p>
-                <input className="invite-link" readOnly value={link} aria-label="Game link" onFocus={(event) => event.target.select()} />
-              </Dialog>
-            )}
-
-            {theirOffer && !outcome && (
-              <Dialog
-                title={theirOffer.kind === 'draw' ? 'Your opponent offers a draw' : 'Your opponent asks to take a move back'}
-                actions={
-                  <>
-                    <button type="button" className="button button-primary" onClick={() => answer(true)}>
-                      {theirOffer.kind === 'draw' ? 'Accept draw' : 'Allow it'}
-                    </button>
-                    <button type="button" className="button" onClick={() => answer(false)}>
-                      {theirOffer.kind === 'draw' ? 'Decline' : 'Refuse'}
-                    </button>
-                  </>
-                }
-              >
-                <p>
-                  {theirOffer.kind === 'draw'
-                    ? 'If you accept, the game ends as a draw.'
-                    : player === you
-                      ? 'Their last move and your reply would both be taken back.'
-                      : 'Their last move would be taken back.'}
-                </p>
-              </Dialog>
-            )}
-
-            {game?.pending_promotion && player !== computer?.color && (!online || player === you) && (
-              <Dialog
-                title="Promote your pawn"
-                actions={PROMOTIONS.map((type) => (
-                  <button key={type} type="button" className="button" onClick={() => promote(type)}>
-                    {type}
-                  </button>
-                ))}
-              >
-                <p>Choose the piece it becomes.</p>
-              </Dialog>
-            )}
-
-            {asking === 'resign' && (
-              <Dialog
-                title={computer || online ? 'Resign this game?' : `${NAMES[player]}, resign this game?`}
-                actions={
-                  <>
-                    <button
-                      type="button"
-                      className="button button-danger"
-                      onClick={() => {
-                        resign(human ?? player)
-                        setAsking(null)
-                      }}
-                    >
-                      Resign
-                    </button>
-                    <button type="button" className="button" onClick={() => setAsking(null)}>
-                      Keep playing
-                    </button>
-                  </>
-                }
-              >
-                <p>
-                  {computer ? 'The computer will win.' : online ? 'Your opponent will win.' : `${NAMES[otherColor(player)]} will win.`}
-                </p>
-              </Dialog>
-            )}
-
-            {asking === 'draw' && online && (
-              <Dialog
-                title="Offer your opponent a draw?"
-                actions={
-                  <>
-                    <button type="button" className="button button-primary" onClick={offerDraw}>
-                      Offer draw
-                    </button>
-                    <button type="button" className="button" onClick={() => setAsking(null)}>
-                      Keep playing
-                    </button>
-                  </>
-                }
-              >
-                <p>They can accept or decline. Making a move declines it.</p>
-              </Dialog>
-            )}
-
-            {asking === 'draw' && !computer && !online && (
-              <Dialog
-                title={`${NAMES[player]} offers a draw`}
-                actions={
-                  <>
-                    <button type="button" className="button button-primary" onClick={offerDraw}>
-                      Accept draw
-                    </button>
-                    <button type="button" className="button" onClick={() => setAsking(null)}>
-                      Decline
-                    </button>
-                  </>
-                }
-              >
-                <p>{NAMES[otherColor(player)]}, do you accept?</p>
-              </Dialog>
-            )}
-
-            {asking === 'draw' && computer && (
-              <Dialog
-                title="Offer the computer a draw?"
-                actions={
-                  <>
-                    <button type="button" className="button button-primary" onClick={offerDraw}>
-                      Offer draw
-                    </button>
-                    <button type="button" className="button" onClick={() => setAsking(null)}>
-                      Keep playing
-                    </button>
-                  </>
-                }
-              >
-                <p>It accepts when it thinks it is worse, or when a long game is level.</p>
-              </Dialog>
-            )}
-
-            {outcome && !resultSeen && !asking && (
-              <Dialog
-                title={outcome.title}
-                actions={
-                  <>
-                    <button type="button" className="button button-primary" onClick={restart}>
-                      New game
-                    </button>
-                    <button type="button" className="button" onClick={() => setResultSeen(true)}>
-                      Look at the board
-                    </button>
-                  </>
-                }
-              >
-                <p>{outcome.detail}</p>
-              </Dialog>
-            )}
-          </div>
-
-          <div className="view-controls">
-            <button type="button" className="button" onClick={() => send('turn', -1)}>
-              Turn left
-            </button>
-            <button type="button" className="button" onClick={() => send('turn', 1)}>
-              Turn right
-            </button>
-            <button type="button" className="button" onClick={() => send('reset')}>
-              Reset view
-            </button>
-            <button type="button" className={`button ${spread ? 'is-on' : ''}`} aria-pressed={spread} onClick={() => setSpread(!spread)}>
-              Spread layers
-            </button>
-            <button type="button" className={`button ${solo ? 'is-on' : ''}`} aria-pressed={solo} onClick={() => setSolo(!solo)}>
-              Only this layer
-            </button>
-          </div>
+          {layerPicker}
+          {boardFrame}
+          {viewControls}
         </section>
 
         <aside className="game-right">
-          <section>
-            <h2>{layerOf(shownLayer).name}, seen from above</h2>
-            <LayerMap
-              board={board}
-              size={size}
-              z={shownLayer}
-              side={side}
-              selected={selected}
-              legalMoves={legalMoves}
-              lastMove={lastMove}
-              showMoves={settings.showLegalMoves}
-              onCellClick={onCellClick}
-            />
-          </section>
-          <MoveList history={history} currentPlayer={player} finished={!!outcome} />
+          {topView}
+          {moveList}
         </aside>
       </main>
     </div>

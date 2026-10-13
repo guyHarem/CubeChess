@@ -1528,3 +1528,666 @@ legend {
     min-height: 300px;
   }
 }
+
+/* ---------- phones ----------
+   Everything below is for a narrow screen held upright. The pages with a board (game,
+   lesson, puzzle) put the 3D board on top for the overview and the top view under it for
+   tapping, and are sized to fit one screen. Setup and the puzzle list are forms and lists:
+   they may scroll, with their main button fixed at the bottom. */
+
+.lesson-number {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .bar {
+    height: 52px;
+    min-height: 0;
+    padding: 0 12px;
+    flex-wrap: nowrap;
+    gap: 8px;
+  }
+
+  .wordmark {
+    font-size: 19px;
+  }
+
+  .bar-link {
+    font-size: 14px;
+  }
+
+  /* Dialogs cover the whole screen, not just the (small) 3D board */
+  .dialog-backdrop {
+    position: fixed;
+    z-index: 50;
+    padding: 16px;
+  }
+
+  .dialog {
+    width: 100%;
+    padding: 20px;
+  }
+
+  .dialog h2 {
+    font-size: 20px;
+  }
+
+  .dialog-actions .button {
+    flex: 1 1 auto;
+  }
+
+  .soon {
+    padding: 28px 16px;
+  }
+
+  .soon h1 {
+    font-size: 28px;
+  }
+
+  /* One row of equal layer buttons, the layer colour as a bar along the bottom edge */
+  .phone-main .layer-picker,
+  .lesson-board .layer-picker,
+  .solve-board .layer-picker {
+    width: 100%;
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+    gap: 6px;
+  }
+
+  .phone-main .layer-button,
+  .lesson-board .layer-button,
+  .solve-board .layer-button {
+    position: relative;
+    min-height: 40px;
+    padding: 0 2px 6px;
+    font-size: 12.5px;
+  }
+
+  .phone-main .swatch,
+  .lesson-board .swatch,
+  .solve-board .swatch {
+    position: absolute;
+    left: 10px;
+    right: 10px;
+    bottom: 5px;
+    width: auto;
+    height: 3px;
+    border: 0;
+    border-radius: 2px;
+  }
+
+  /* ----- game ----- */
+  .game.is-phone {
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .is-phone .wordmark {
+    display: none;
+  }
+
+  .is-phone .turn {
+    min-width: 0;
+    height: 36px;
+    padding: 0 14px 0 10px;
+    gap: 8px;
+    overflow: hidden;
+    font-size: 14px;
+    white-space: nowrap;
+  }
+
+  .is-phone .turn-check {
+    padding: 1px 8px;
+    font-size: 12px;
+  }
+
+  .is-phone .turn .chip {
+    width: 16px;
+    height: 16px;
+  }
+
+  .is-phone .bar > .button {
+    min-height: 36px;
+    padding: 0 14px;
+  }
+
+  .phone-main {
+    flex: 1;
+    min-height: 0;
+    padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .phone-notices {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .phone-notices:empty {
+    display: none;
+  }
+
+  .phone-notices p {
+    padding: 8px 12px;
+    font-size: 13px;
+  }
+
+  .phone-main .board-frame {
+    flex: 1 1 0;
+    height: auto;
+    min-height: 130px;
+  }
+
+  .phone-main > section {
+    flex: none;
+  }
+
+  .phone-main > section h2 {
+    display: none;
+  }
+
+  /* The top view is as wide as the screen allows, but never so tall that it squeezes the 3D board out */
+  .phone-main .map-frame {
+    width: min(100%, 43dvh);
+    margin: 0 auto;
+  }
+
+  .player.is-compact {
+    flex: none;
+    min-height: 44px;
+    padding: 6px 12px;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .player.is-compact .player-note {
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .player.is-compact .player-material strong {
+    font-size: 16px;
+  }
+
+  .player.is-compact .clock {
+    min-width: 60px;
+    font-size: 16px;
+  }
+
+  /* The menu: everything that is not needed on every move */
+  .sheet {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    padding: 10px 16px calc(20px + env(safe-area-inset-bottom));
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    overflow-y: auto;
+    background: var(--bg);
+  }
+
+  .sheet-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .sheet-head h2 {
+    font-size: 20px;
+    font-weight: 600;
+  }
+
+  .sheet .view-controls {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .sheet .moves {
+    flex: none;
+  }
+
+  .sheet .moves-box {
+    flex: none;
+    max-height: 32dvh;
+  }
+
+  .sheet .bar-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  /* ----- home ----- */
+  .home-main {
+    padding: 20px 16px 16px;
+    gap: 16px;
+    justify-content: center;
+  }
+
+  .home-title {
+    gap: 8px;
+  }
+
+  .home-brand {
+    gap: 12px;
+  }
+
+  .home-brand svg {
+    width: 52px;
+    height: 52px;
+  }
+
+  .home h1 {
+    font-size: 40px;
+  }
+
+  .home-title p {
+    font-size: 15px;
+  }
+
+  .modes {
+    gap: 12px;
+  }
+
+  /* Each card: the picture on the left, the words and the button on the right */
+  .mode {
+    padding: 12px 14px 12px 12px;
+    display: grid;
+    grid-template-columns: 104px minmax(0, 1fr);
+    column-gap: 14px;
+    row-gap: 4px;
+    align-content: start;
+  }
+
+  .mode:hover {
+    transform: none;
+  }
+
+  .mode-picture {
+    grid-row: 1 / span 3;
+    height: 112px;
+  }
+
+  .mode h2 {
+    font-size: 19px;
+  }
+
+  .mode p {
+    font-size: 14px;
+  }
+
+  .mode .button {
+    margin-top: 4px;
+    min-height: 38px;
+    justify-self: start;
+  }
+
+  .home-note {
+    font-size: 13px;
+    text-align: center;
+  }
+
+  /* ----- setup ----- */
+  .setup-main {
+    padding: 16px 16px 92px;
+  }
+
+  .setup-form {
+    gap: 18px;
+  }
+
+  .setup-form h1 {
+    font-size: 30px;
+  }
+
+  .choices-3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .choices-3 .choice {
+    min-height: 68px;
+    padding: 8px 10px;
+    font-size: 15px;
+  }
+
+  .choices-3 .choice small {
+    font-size: 12px;
+    line-height: 1.25;
+  }
+
+  .setup-pair {
+    gap: 18px;
+  }
+
+  .setup-preview {
+    display: none;
+  }
+
+  .setup-actions {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 20;
+    padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+    border-top: 1px solid var(--line);
+    background: var(--bg);
+  }
+
+  .setup-actions .button-large {
+    flex: 1;
+  }
+
+  /* ----- lessons ----- */
+  .learn {
+    height: auto;
+    min-height: 100dvh;
+    overflow: visible;
+  }
+
+  .learn-main {
+    padding: 10px 12px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .lesson-list {
+    flex: none;
+    flex-direction: row;
+    gap: 5px;
+    overflow: visible;
+  }
+
+  .lesson-list h2,
+  .lesson-note,
+  .lesson-mark,
+  .lesson-title {
+    display: none;
+  }
+
+  .lesson-number {
+    display: inline;
+  }
+
+  .lesson-link {
+    flex: 1;
+    min-height: 40px;
+    padding: 0;
+    justify-content: center;
+    border-color: var(--border);
+    font: 600 14px var(--mono);
+  }
+
+  .lesson-link.is-done {
+    border-color: #2f6338;
+    background: #16291a;
+    color: #c4ebb9;
+  }
+
+  .lesson {
+    flex: 1;
+    gap: 10px;
+  }
+
+  .lesson-count {
+    font-size: 13px;
+  }
+
+  .lesson h1 {
+    font-size: 22px;
+  }
+
+  .lesson-text {
+    font-size: 14.5px;
+    line-height: 1.4;
+  }
+
+  .task {
+    padding: 10px 12px;
+    font-size: 14.5px;
+  }
+
+  /* The 3D board takes whatever height is left on the screen, down to a minimum; on a
+     short phone the page scrolls a little instead of squeezing it further */
+  .lesson-board {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .lesson-stage {
+    flex: 1 1 auto;
+  }
+
+  .lesson-board .board-frame {
+    flex: 1 1 150px;
+    height: auto;
+    min-height: 150px;
+  }
+
+  /* The small top view on the left, what its marks mean on the right */
+  .lesson-side {
+    flex-direction: row;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .lesson-side h2 {
+    display: none;
+  }
+
+  .lesson-side .map-frame {
+    flex: none;
+    width: 58%;
+    max-width: 230px;
+  }
+
+  .legend {
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+    gap: 8px;
+    font-size: 13px;
+  }
+
+  .lesson-actions {
+    position: sticky;
+    bottom: 0;
+    margin-top: auto;
+    padding: 8px 0 calc(8px + env(safe-area-inset-bottom));
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
+    background: var(--bg);
+  }
+
+  .lesson-actions .button {
+    padding: 0 4px;
+    font-size: 13px;
+    text-align: center;
+  }
+
+  .lesson-wait {
+    display: none;
+  }
+
+  /* ----- puzzles: the list ----- */
+  .scenarios-main {
+    padding: 14px 12px 92px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .scenarios-list {
+    gap: 14px;
+  }
+
+  .scenarios-intro {
+    gap: 4px;
+  }
+
+  .scenarios-intro h1 {
+    font-size: 28px;
+  }
+
+  .scenarios-intro p:not(.help) {
+    font-size: 15px;
+  }
+
+  .tier {
+    gap: 8px;
+  }
+
+  .tier h2 {
+    font-size: 17px;
+  }
+
+  .tier h2 span {
+    display: block;
+    margin: 2px 0 0;
+    font-size: 13px;
+  }
+
+  .tiles {
+    display: grid;
+    grid-template-columns: repeat(8, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .tile {
+    width: auto;
+    height: 44px;
+    border-radius: 10px;
+  }
+
+  .tile strong {
+    font-size: 16px;
+  }
+
+  .tile small {
+    display: none;
+  }
+
+  /* The chosen puzzle and its Start button stay in reach at the bottom */
+  .scenario-preview {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 20;
+    padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+    border-width: 1px 0 0;
+    border-radius: 0;
+    background: var(--bg);
+  }
+
+  .scenario-preview > div:first-child {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .scenario-preview h2 {
+    margin: 0;
+    font-size: 16px;
+  }
+
+  .scenario-preview .help {
+    font-size: 12.5px;
+  }
+
+  .scenario-preview p:not(.help),
+  .scenario-picture {
+    display: none;
+  }
+
+  .scenario-preview .button-large {
+    min-height: 44px;
+    padding: 0 18px;
+    font-size: 15px;
+  }
+
+  /* ----- puzzles: playing one ----- */
+  .solve {
+    height: auto;
+    min-height: 100dvh;
+    overflow: visible;
+  }
+
+  .solve-main {
+    padding: 10px 12px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  /* The info column dissolves so that its parts can be ordered around the boards */
+  .solve-info {
+    display: contents;
+  }
+
+  .solve-info h1 {
+    margin: 2px 0;
+    font-size: 20px;
+  }
+
+  .solve-goal {
+    font-size: 14.5px;
+  }
+
+  .solve-board {
+    flex: 1 1 auto;
+    gap: 8px;
+  }
+
+  .solve-board .board-frame {
+    flex: 1 1 150px;
+    height: auto;
+    min-height: 150px;
+  }
+
+  .solve-side h2,
+  .solve-side .help {
+    display: none;
+  }
+
+  .solve-side .map-frame {
+    width: min(100%, 36dvh);
+    margin: 0 auto;
+  }
+
+  .solve-actions {
+    order: 5;
+    position: sticky;
+    bottom: 0;
+    margin-top: auto;
+    padding: 8px 0 calc(8px + env(safe-area-inset-bottom));
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+    background: var(--bg);
+  }
+
+  .solve-actions .button {
+    padding: 0 4px;
+    font-size: 13px;
+    text-align: center;
+  }
+}
