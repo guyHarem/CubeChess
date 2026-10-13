@@ -57,7 +57,7 @@ class TestPuzzles(unittest.TestCase):
                     self.assertEqual(choice.mate_in, tier["mateIn"])
                     self.assertLess(choice.seconds, 2.0)
                     count += 1
-        self.assertEqual(count, 30)
+        self.assertEqual(count, 32)
 
 
 class TestCommonSense(unittest.TestCase):

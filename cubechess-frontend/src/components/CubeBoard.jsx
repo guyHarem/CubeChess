@@ -5,7 +5,7 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import * as THREE from 'three'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
-import { boardItems, keyOf, layerOf, sameCoord } from '../lib/chess.js'
+import { boardItems, isDarkSquare, keyOf, layerOf, sameCoord } from '../lib/chess.js'
 import { createMoveBall, createPiece, createRock } from '../pieces3d.js'
 
 const FLAT = [-Math.PI / 2, 0, 0]
@@ -39,7 +39,7 @@ function checkerTexture(layer, size) {
     for (let px = 0; px < size; px++) {
       for (let py = 0; py < size; py++) {
         // canvas row 0 is the far edge of the board (the highest rank)
-        ctx.fillStyle = (px + (size - 1 - py)) % 2 === 0 ? layer.dark : layer.light
+        ctx.fillStyle = isDarkSquare(px, size - 1 - py, layer.z) ? layer.dark : layer.light
         ctx.fillRect(px, py, 1, 1)
       }
     }

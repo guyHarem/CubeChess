@@ -67,8 +67,9 @@ class TestOpeningPosition(unittest.TestCase):
                          [(0, 0, -2), (0, 0, -1), (0, 0, 1), (0, 0, 2)])
 
     def test_bishop_cannot_jump_over_pieces(self):
+        # The knight in the Dungeon beside it blocks one of its lines down
         moves = self.game.get_legal_moves((2, 0, 0))
-        self.assertEqual(len(moves), 12)
+        self.assertEqual(len(moves), 10)
         self.assertTrue(all(z != 0 for _, _, z in moves))
 
     def test_king_has_only_vertical_moves(self):
@@ -111,6 +112,102 @@ class TestOpeningPosition(unittest.TestCase):
         self.game.make_move((4, 6, 0), (4, 4, 0))
         self.assertEqual(self.game.current_player, "white")
         self.assertEqual(len(self.game.move_history), 2)
+
+
+class TestKingCaptures(unittest.TestCase):
+    """The king steps on its own layer or straight up and down. One step sideways together
+    with one layer up or down it cannot step, but it can capture there."""
+
+    def test_cannot_step_diagonally_between_layers(self):
+        game = custom_game({(3, 3, 0): King("white"), (7, 7, 2): King("black")}, rocks=False)
+        moves = game.get_legal_moves((3, 3, 0))
+        self.assertEqual(len(moves), 10)
+        for blocked in ((4, 3, 1), (2, 3, -1), (3, 4, 1), (3, 2, -1)):
+            self.assertNotIn(blocked, moves)
+
+    def test_takes_a_queen_that_checks_from_there(self):
+        game = custom_game({(3, 3, 0): King("white"), (7, 7, 2): King("black"), (4, 3, 1): Queen("black")},
+                           rocks=False)
+        self.assertTrue(game.is_in_check("white"))
+        self.assertIn((4, 3, 1), game.get_legal_moves((3, 3, 0)))
+        game.make_move((3, 3, 0), (4, 3, 1))
+        self.assertEqual(game.white_king_pos, (4, 3, 1))
+        self.assertEqual(game.move_history[-1]['captured_piece'], "Queen(black)")
+        game.undo_move()
+        self.assertEqual(game.white_king_pos, (3, 3, 0))
+        self.assertIsInstance(game.board.get_piece((4, 3, 1)), Queen)
+
+    def test_cannot_take_a_protected_piece(self):
+        game = custom_game({(3, 3, 0): King("white"), (7, 7, 2): King("black"), (4, 3, 1): Queen("black"),
+                            (4, 7, 1): Rook("black")}, rocks=False)
+        self.assertNotIn((4, 3, 1), game.get_legal_moves((3, 3, 0)))
+
+    def test_takes_any_enemy_piece_there_but_not_its_own_or_a_rock(self):
+        game = custom_game({(3, 3, 0): King("white"), (7, 7, 2): King("black"), (3, 4, 1): Knight("black"),
+                            (2, 3, 1): Pawn("white")}, rocks=False)
+        game.board.set_piece(Rock(), (3, 2, -1))
+        moves = game.get_legal_moves((3, 3, 0))
+        self.assertIn((3, 4, 1), moves)       # the knight does not attack the king, but can still be taken
+        self.assertNotIn((2, 3, 1), moves)
+        self.assertNotIn((3, 2, -1), moves)
+
+    def test_three_axes_at_once_is_out_of_reach(self):
+        game = custom_game({(3, 3, 0): King("white"), (7, 7, 2): King("black"), (4, 4, 1): Knight("black")},
+                           rocks=False)
+        self.assertNotIn((4, 4, 1), game.get_legal_moves((3, 3, 0)))
+
+    def test_the_king_guards_those_squares(self):
+        # The black king may not step next to the white king, diagonally between layers included
+        game = custom_game({(3, 3, 0): King("white"), (5, 3, 1): King("black")}, current_player="black", rocks=False)
+        self.assertNotIn((4, 3, 1), game.get_legal_moves((5, 3, 1)))
+        self.assertIn((6, 3, 1), game.get_legal_moves((5, 3, 1)))
+        # ... and a piece standing there is protected by its king
+        game = custom_game({(3, 3, 0): King("white"), (7, 7, 2): King("black"), (4, 3, 1): Bishop("white"),
+                            (4, 6, 1): Rook("black")}, current_player="black", rocks=False)
+        game.make_move((4, 6, 1), (4, 3, 1))                 # rook takes the bishop
+        self.assertIn((4, 3, 1), game.get_legal_moves((3, 3, 0)))   # and the king takes back
+
+    def test_that_capture_can_be_the_only_way_out_of_mate(self):
+        # Cornered in the Abyss by a queen one step sideways and one layer up. Without the
+        # capture this would be checkmate.
+        pieces = {(0, 0, -2): King("white"), (7, 7, 2): King("black"), (1, 0, -1): Queen("black"),
+                  (0, 7, -2): Rook("black")}     # the rook covers the one square the queen does not
+        game = custom_game(pieces, rocks=False)
+        self.assertTrue(game.is_in_check("white"))
+        self.assertEqual(game.get_legal_moves((0, 0, -2)), [(1, 0, -1)])
+        self.assertFalse(game.is_checkmate("white"))
+        protected = custom_game({**pieces, (1, 6, -1): Rook("black")}, rocks=False)
+        self.assertTrue(protected.is_checkmate("white"))
+
+
+class TestStartingArmy(unittest.TestCase):
+    def test_extra_knights_below_and_bishops_above(self):
+        game = GameState()
+        for color, rank in (("white", 0), ("black", 7)):
+            for x in (1, 6):
+                piece = game.board.get_piece((x, rank, -1))
+                self.assertIsInstance(piece, Knight)
+                self.assertEqual(piece.color, color)
+            for x in (2, 5):
+                piece = game.board.get_piece((x, rank, 1))
+                self.assertIsInstance(piece, Bishop)
+                self.assertEqual(piece.color, color)
+            self.assertEqual(len(game.get_all_pieces_of_color(color)), 20)
+
+    def test_nothing_is_attacked_before_the_first_move(self):
+        game = GameState()
+        for color, enemy in (("white", "black"), ("black", "white")):
+            for coord, piece in game.get_all_pieces_of_color(color):
+                self.assertFalse(game.is_square_under_attack(coord, enemy), f"{piece} on {coord}")
+        moves = [(coord, move) for coord, _ in game.get_all_pieces_of_color("white")
+                 for move in game.get_legal_moves(coord)]
+        self.assertEqual(len(moves), 145)
+        self.assertTrue(all(game.board.get_piece(move) is None for _, move in moves))
+
+    def test_the_new_pieces_can_move_at_once(self):
+        game = GameState()
+        self.assertEqual(len(game.get_legal_moves((1, 0, -1))), 7)    # a Dungeon knight
+        self.assertEqual(len(game.get_legal_moves((2, 0, 1))), 10)    # a Sky bishop
 
 
 class TestBlocking(unittest.TestCase):

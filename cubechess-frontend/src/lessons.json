@@ -48,7 +48,7 @@
     {
       "id": "bishop",
       "title": "The bishop and its diagonals",
-      "text": "A bishop moves diagonally. On one layer that is the diagonal you already know. It can also climb or dive diagonally: one cell sideways or forward for every layer it changes.",
+      "text": "A bishop moves diagonally. On one layer that is the diagonal you already know. It can also climb or dive diagonally: one cell sideways or forward for every layer it changes. Either way it stays on squares of one colour, because the pattern shifts by one square from layer to layer.",
       "steps": [
         {
           "task": "Climb from the Dungeon to the Sky in a single move.",
@@ -123,7 +123,7 @@
     {
       "id": "king",
       "title": "The king steps up and down",
-      "text": "The king moves one cell in any direction on its layer, or one cell straight up or down. It never moves diagonally between layers. Being able to change layer makes it harder to trap than in normal chess.",
+      "text": "The king moves one cell in any direction on its layer, or one cell straight up or down. It cannot step diagonally between layers, but it can capture there. Being able to change layer makes it harder to trap than in normal chess.",
       "steps": [
         {
           "task": "The rook is giving check along the rank. Escape by stepping up into the Sky.",
@@ -136,6 +136,18 @@
           "to": [2, 2, 1],
           "expect": "move",
           "done": "The rook attacks along the Ground. One layer up, the king is out of its line."
+        },
+        {
+          "task": "The queen gives check from the Sky, one cell sideways and one layer up. Take it.",
+          "layer": 0,
+          "pieces": [
+            { "coord": [2, 2, 0], "type": "King", "color": "white" },
+            { "coord": [3, 2, 1], "type": "Queen", "color": "black" }
+          ],
+          "from": [2, 2, 0],
+          "to": [3, 2, 1],
+          "expect": "capture",
+          "done": "The king cannot step to an empty cell there, but it can always take a piece that stands next to it."
         }
       ]
     },

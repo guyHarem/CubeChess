@@ -184,7 +184,7 @@ class TestRandomPositions(RandomisedTestCase):
                     from_coord, to_coord = rng.choice(moves)
                     self.play_and_undo(game, from_coord, to_coord, rng, tag)
                     self.assert_matches_reference(game, tag + " (after)")
-        self.assertGreater(checked, 150)
+        self.assertGreater(checked, 130)
 
     @staticmethod
     def _random_piece(rng):

@@ -293,6 +293,8 @@ class GameState:
         # Get possible attack moves
         if isinstance(piece, Pawn):
             possible_moves = piece.get_possible_moves(from_coord, self.board.bounds)[1]  # captures only
+        elif isinstance(piece, King):
+            possible_moves = piece.get_attacked_squares(from_coord, self.board.bounds)  # steps and capture-only squares
         else:
             possible_moves = piece.get_possible_moves(from_coord, self.board.bounds)
         
@@ -429,6 +431,17 @@ class GameState:
                 
                 if self.simulate_move(piece, from_coord, possible_move):
                     legal_moves.append(possible_move)
+        
+        # The king may also capture (but not step) one square away diagonally between layers
+        if isinstance(piece, King):
+            for possible_capture in piece.get_capture_only_moves(from_coord, self.board.bounds):
+                destination_piece = self.board.get_piece(possible_capture)
+                if destination_piece is None or isinstance(destination_piece, Rock):
+                    continue
+                if destination_piece.color == piece.color:
+                    continue
+                if self.simulate_move(piece, from_coord, possible_capture):
+                    legal_moves.append(possible_capture)
         
         # Add castling destinations if piece is King
         if isinstance(piece, King):
@@ -723,11 +736,14 @@ class GameState:
     
     
     def has_insufficient_material(self, color):
-        """Check if this player's pieces could never checkmate a bare king: a lone king,
-        king + one knight, bishop or rook, or king + bishops that all stand on one square color
-        (counting the layer: see Bishop.get_square_color).
+        """Check if this player's pieces cannot force checkmate against a bare king: a lone
+        king, king + one knight, bishop or rook, or king + bishops that all stand on one square
+        color (counting the layer: see Bishop.get_square_color).
         A rook is enough only on a flat one-layer board; with more layers the king always has
-        a way out up or down (tools/check_mating_material.py checks every position)."""
+        a way out up or down. Checkmate positions with a single piece do exist, in corners,
+        but the defender has to walk into them: tools/forced_mate.py solves this exactly on
+        the small board (a rook, bishop or knight wins only when mate is already one move
+        away, 0.1% of positions)."""
         material = self._get_material_count(color)
         total_pieces = sum(material.values())
         

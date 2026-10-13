@@ -57,7 +57,12 @@ class Tables:
         self.slides[ROOK] = lines(Rook("white"))
         self.slides[QUEEN] = lines(Queen("white"))
         self.knight = jumps(Knight("white"))
-        self.king = jumps(King("white"))
+        self.king = jumps(King("white"))          # where the king can step
+        # ... where it can capture but not step, and everything it attacks
+        king = King("white")
+        self.king_takes = [tuple(index[target] for target in king.get_capture_only_moves(coord, bounds))
+                           for coord in self.coords]
+        self.king_attacks = [self.king[square] + self.king_takes[square] for square in range(len(self.coords))]
 
         # Along the rank in each direction (for castling): row[square] = (towards +x, towards -x)
         self.row = []

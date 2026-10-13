@@ -157,6 +157,25 @@ class King(Piece):
                 all_king_moves.append(new_coord)
                 
         return all_king_moves
+    
+    def get_capture_only_moves(self, self_coord: tuple, bounds=DEFAULT_BOUNDS):
+        """Squares the king cannot step to but can capture on: one step sideways (or forward
+        or back) together with one layer up or down. A queen or bishop gives check from
+        there, so the king must be able to take it."""
+        capture_vectors = [
+            (1,0,1), (1,0,-1), (-1,0,1), (-1,0,-1),
+            (0,1,1), (0,1,-1), (0,-1,1), (0,-1,-1)
+        ]
+        captures = []
+        for vector in capture_vectors:
+            new_coord = Piece.coord_sum(self_coord, vector)
+            if Piece.is_coord_in_board(new_coord, bounds):
+                captures.append(new_coord)
+        return captures
+    
+    def get_attacked_squares(self, self_coord: tuple, bounds=DEFAULT_BOUNDS):
+        """Every square the king attacks: where it can step, plus where it can only capture"""
+        return self.get_possible_moves(self_coord, bounds) + self.get_capture_only_moves(self_coord, bounds)
             
         
 class Pawn(Piece):

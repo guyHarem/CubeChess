@@ -177,7 +177,7 @@ class FastBoard:
             if cells[origin] == knight:
                 return True
         king = KING | by
-        for origin in tables.king[square]:
+        for origin in tables.king_attacks[square]:
             if cells[origin] & 15 == king:
                 return True
         pawn = PAWN | by
@@ -315,6 +315,9 @@ class FastBoard:
                     occupant = cells[target]
                     if occupant == 0 or enemy[occupant]:
                         add(origin | target << 9)
+                for target in tables.king_takes[origin]:   # capture only
+                    if enemy[cells[target]]:
+                        add(origin | target << 9)
                 if piece & UNMOVED:
                     self._add_castling(origin, side, add)
             else:
@@ -374,7 +377,7 @@ class FastBoard:
                     if enemy[cells[target]]:
                         add(origin | target << 9)
             elif kind == KING:
-                for target in tables.king[origin]:
+                for target in tables.king_attacks[origin]:
                     if enemy[cells[target]]:
                         add(origin | target << 9)
             else:

@@ -11,6 +11,8 @@ ROOK_DIRS = [(1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1)
 # Two axes change by one step each, the third stays put
 BISHOP_DIRS = [d for d in product((-1, 0, 1), repeat=3) if sorted(map(abs, d)) == [0, 1, 1]]
 KING_DIRS = [d for d in product((-1, 0, 1), repeat=3) if d[2] == 0 and d != (0, 0, 0)] + [(0, 0, 1), (0, 0, -1)]
+# Where the king can capture but not step: one step in the layer's plane (not diagonal) and one layer up or down
+KING_TAKES = [d for d in product((-1, 0, 1), repeat=3) if d[2] != 0 and abs(d[0]) + abs(d[1]) == 1]
 KNIGHT_JUMPS = [d for d in product((-2, -1, 0, 1, 2), repeat=3) if sorted(map(abs, d)) == [0, 1, 2]]
 
 
@@ -49,7 +51,7 @@ def attacked_squares(board, coord, bounds=FULL):
     elif kind == "Knight":
         out = [add(coord, j) for j in KNIGHT_JUMPS]
     elif kind == "King":
-        out = [add(coord, d) for d in KING_DIRS]
+        out = [add(coord, d) for d in KING_DIRS + KING_TAKES]
     else:
         dirs = {"Rook": ROOK_DIRS, "Bishop": BISHOP_DIRS, "Queen": ROOK_DIRS + BISHOP_DIRS}[kind]
         for d in dirs:
@@ -116,8 +118,11 @@ def legal_moves(board, coord, history, bounds=FULL):
         if ep and ep[0] in attacked_squares(board, coord, bounds) and enemy(board, ep[1], color):
             candidates.append((ep[0], ep[1]))
     else:
+        steps_only = {add(coord, d) for d in KING_DIRS} if kind == "King" else None
         for square in attacked_squares(board, coord, bounds):
-            if square not in board or enemy(board, square, color):
+            if enemy(board, square, color):
+                candidates.append((square, None))
+            elif square not in board and (steps_only is None or square in steps_only):
                 candidates.append((square, None))
 
     moves = []

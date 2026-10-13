@@ -81,6 +81,14 @@ class Board:
         self.board[(7,7,0)] = Rook("black")
         for i in range(8):
             self.board[(i,6,0)] = Pawn("black")
+        
+        ## Off the Ground: two knights each in the Dungeon and two bishops each in the Sky
+        for x in (1, 6):
+            self.board[(x,0,-1)] = Knight("white")
+            self.board[(x,7,-1)] = Knight("black")
+        for x in (2, 5):
+            self.board[(x,0,1)] = Bishop("white")
+            self.board[(x,7,1)] = Bishop("black")
                       
     def init_rocks(self):
         # Layer -1: Hourglass

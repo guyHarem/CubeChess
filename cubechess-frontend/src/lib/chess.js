@@ -13,6 +13,11 @@ export const SMALL_BOARD = { size: 5, layers: [1, 0, -1] }
 
 export const layerOf = (z) => LAYERS.find((layer) => layer.z === z)
 
+// The checkered pattern shifts by one square on every other layer. That way a bishop keeps its
+// square colour when it changes layer, and a rook stepping up or down changes colour just as
+// it does stepping sideways.
+export const isDarkSquare = (x, y, z) => (((x + y + z) % 2) + 2) % 2 === 0
+
 // Standard chess values. Piece strength is probably different in 3D; retune after playtesting.
 export const PIECE_VALUES = { Pawn: 1, Knight: 3, Bishop: 3, Rook: 5, Queen: 9, King: 0 }
 const LETTERS = { King: 'K', Queen: 'Q', Rook: 'R', Bishop: 'B', Knight: 'N', Pawn: '' }
@@ -141,9 +146,14 @@ export function boardFromPieces(pieces, withRocks = false) {
 }
 
 export const START_BOARD = makeBoard(
-  BACK_RANK.flatMap((type, x) => [
-    [type, 'white', x, 0, 0], ['Pawn', 'white', x, 1, 0], ['Pawn', 'black', x, 6, 0], [type, 'black', x, 7, 0],
-  ]),
+  [
+    ...BACK_RANK.flatMap((type, x) => [
+      [type, 'white', x, 0, 0], ['Pawn', 'white', x, 1, 0], ['Pawn', 'black', x, 6, 0], [type, 'black', x, 7, 0],
+    ]),
+    // Two knights each in the Dungeon and two bishops each in the Sky
+    ...[1, 6].flatMap((x) => [['Knight', 'white', x, 0, -1], ['Knight', 'black', x, 7, -1]]),
+    ...[2, 5].flatMap((x) => [['Bishop', 'white', x, 0, 1], ['Bishop', 'black', x, 7, 1]]),
+  ],
   ROCKS,
 )
 export const PUZZLE_BOARD = makeBoard(

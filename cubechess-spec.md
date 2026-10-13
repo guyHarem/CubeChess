@@ -10,9 +10,19 @@ Every position on the board is represented as a 3D tuple: `(x, y, z)` where:
 *   **$Z$ (Layer/Altitude):** `-2` to `+2`.
     *   `+2`: **Space** (Top Layer)
     *   `+1`: **Sky** (Upper Layer)
-    *   `0`: **Ground** (Standard Chess Board; all pieces start here)
+    *   `0`: **Ground** (Standard Chess Board; the kings, queens, rooks, pawns and one pair of knights and bishops start here)
     *   `-1`: **Dungeon** (Lower Layer, contains static rocks)
     *   `-2`: **Abyss** (Bottom Layer, contains static rocks)
+
+### Starting position
+The Ground holds the ordinary chess starting position. Each player also has two **Knights in the
+Dungeon** (under the b and g files of their back rank) and two **Bishops in the Sky** (above the
+c and f files), so 20 pieces a side.
+
+### Square colors
+The checkered pattern shifts by one square on every other layer: a cell is dark when
+$x + y + z$ is even. A Bishop therefore stays on one color wherever it goes, and a Rook stepping
+up or down changes color just as it does stepping sideways.
 
 ---
 
@@ -28,7 +38,8 @@ To prevent cognitive overload and maintain strategic playability, **no piece can
 
 ### The King
 *   **Movement:** Standard chess King movements on its current plane ($XY$ movements), **plus** the ability to move exactly 1 step straight up or down ($Z \pm 1$).
-*   **Diagonals:** The King **cannot** move diagonally across layers (no vertical-diagonal moves).
+*   **Diagonals:** The King **cannot step** diagonally across layers (no vertical-diagonal moves).
+*   **Captures:** The King **can capture** there. An enemy piece standing one square sideways, forward or back and one layer up or down can be taken, like any piece next to it on its own layer. A Queen or Bishop gives check from such a square, so without this the King could be checked by a piece beside it that it could not touch. It follows that the King guards those squares: the two Kings may not stand there next to each other, and a piece there is protected by its King.
 *   **Total Moves in Open Space:** 10 potential squares (8 on its current layer, 1 directly above, 1 directly below).
 
 ### The Rook (1-Axis Piece)

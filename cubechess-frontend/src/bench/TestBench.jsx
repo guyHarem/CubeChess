@@ -256,7 +256,7 @@ function App() {
                     const isMove = legalMoves.some((move) => sameCoord(move, coord))
                     const classes = [
                       'square',
-                      (x + y) % 2 === 0 ? 'dark' : 'light',
+                      (((x + y + z) % 2) + 2) % 2 === 0 ? 'dark' : 'light',
                       sameCoord(selected, coord) ? 'selected' : '',
                       isMove ? (piece ? 'capture' : 'move') : '',
                     ]

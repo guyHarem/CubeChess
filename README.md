@@ -26,7 +26,7 @@ A 3D chess variant on a 5-layer cube board. This is a **work in progress (WIP)**
 - ✅ Three.js 3D board: cube-shaped cells, 3D pieces, layer tools, camera controls
 - ✅ Move list, captured material, chess clock with increment, undo, resign and draw by agreement
 - ✅ Lesson player: nine lessons on a 5×5 three-layer board (`cubechess-frontend/src/lessons.json`)
-- ✅ Scenario player: 30 checkmate puzzles in four tiers (`cubechess-frontend/src/scenarios.json`)
+- ✅ Scenario player: 32 checkmate puzzles in four tiers (`cubechess-frontend/src/scenarios.json`)
 - ✅ Play against the computer (easy, medium, hard), with the last move marked on the board
 - ✅ Online play with a link: seats without accounts, draw and take-back offers, watching
 - ⏳ Hosting (so far it runs on your own machine and network)
@@ -50,6 +50,16 @@ A 3D chess variant on a 5-layer cube board. This is a **work in progress (WIP)**
 **Board Dimensions:** 8×8 per layer (standard chess board per layer)
 
 **Two-Axis Rule:** No piece moves all 3 axes simultaneously (except Pawn captures in 3D context)
+
+**Starting position:** ordinary chess on the Ground, plus two knights each in the Dungeon (under
+b and g) and two bishops each in the Sky (above c and f): 20 pieces a side.
+
+**King:** steps like a chess king on its layer, or one cell straight up or down. One cell
+sideways together with one layer up or down it cannot step, but it can capture there, so a
+queen or bishop cannot check it from the next cell without risk.
+
+**Square colors:** the checkered pattern shifts by one square on every other layer, so a bishop
+keeps its color when it changes layer. The top-down view shows chess coordinates (a-h, 1-8).
 
 ---
 
@@ -168,12 +178,15 @@ piece moved (as in `Nbd2`).
 **Draws:** `draw_reason` is `null` or one of `stalemate`, `repetition` (the same position
 occurred three times), `move_limit` (`move_limit` moves by each player, 50 by default, with
 no capture and no pawn move; `halfmove_clock` counts the single moves so far) or
-`insufficient_material`. A player's material is insufficient when it could never checkmate a
-bare king: a lone king, king and one knight, bishop or rook, or king and bishops on one square
-color. A bishop's square color counts the layer too (`x + y + z` odd or even), because a
-bishop can change layers. The rook is on that list because a king that can step to another layer always escapes it
-(`tools/check_mating_material.py` checks every position); on a flat one-layer board a rook is
-enough. The game is drawn when both players are in that state. The draw rules only apply while both kings are on the board, so
+`insufficient_material`. A player's material is insufficient when it cannot force checkmate
+against a bare king: a lone king, king and one knight, bishop or rook, or king and bishops on
+one square color. A bishop's square color counts the layer too (`x + y + z` odd or even), because
+a bishop can change layers. The rook is on that list because a king that can step to another
+layer always escapes it; on a flat one-layer board a rook is enough. Checkmate positions with a
+single piece do exist in corners, but the defender has to walk into them:
+`tools/forced_mate.py` solves this exactly on the small board (a rook, bishop or knight wins
+only from positions already one move from mate, 0.1% of them; a queen always wins).
+The game is drawn when both players are in that state. The draw rules only apply while both kings are on the board, so
 practice positions without kings never end in a draw.
 
 **Game over:** once the game has ended (checkmate, any draw, resignation, agreement or

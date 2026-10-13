@@ -55,7 +55,7 @@ def choose_move(game, level="hard", seconds=None, rng=None, nodes=None, params=N
     rng = rng or random
     board = FastBoard.from_game_state(game, params)
     margin = settings["margin"]
-    full_armies = len(board.squares[0]) == 16 and len(board.squares[1]) == 16
+    full_armies = len(board.squares[0]) == 20 and len(board.squares[1]) == 20
     if level == "hard" and full_armies and len(board.history) < OPENING_PLIES:
         margin = OPENING_MARGIN
 

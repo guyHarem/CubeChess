@@ -819,6 +819,32 @@ legend {
   color: var(--soft);
 }
 
+/* The top view with chess coordinates: rank numbers down the side, file letters underneath */
+.map-frame {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr);
+  gap: 4px 6px;
+}
+
+.map-ranks,
+.map-files {
+  display: grid;
+  color: var(--muted);
+  font: 500 11px/1 'JetBrains Mono', monospace;
+  text-align: center;
+}
+
+.map-ranks {
+  grid-auto-rows: 1fr;
+  align-items: center;
+}
+
+.map-files {
+  grid-column: 2;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+}
+
 .layer-map {
   display: grid;
   border: 1px solid var(--border);

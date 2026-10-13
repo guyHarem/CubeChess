@@ -1,9 +1,10 @@
 """
-Which single pieces can checkmate a bare king?
+Which single pieces can checkmate a bare king at all?
 
 Looks at every position where a king plus one other piece gives check to a lone king,
-and counts the checkmates. Zero means that piece is "insufficient material": see
-GameState.has_insufficient_material, which relies on these results.
+and counts the checkmates. With the king guarding every square next to it (see
+King.get_capture_only_moves) a few such positions exist for every piece, all in corners.
+Whether they can be FORCED is a different question: tools/forced_mate.py answers that.
 
     venv/bin/python tools/check_mating_material.py            # full board with rocks
     venv/bin/python tools/check_mating_material.py 5 -1 1     # size, lowest layer, highest layer
@@ -94,14 +95,17 @@ def bishops_on_one_color_can_mate(size=8, z_min=-2, z_max=2, rocks=True):
     squares = free_squares(game)
     free = set(squares)
     king = King("white")
-    reach = {square: set(king.get_possible_moves(square, game.board.bounds)) for square in squares}
+    # Where a king can step (its exits), and everything it guards (which is more: see
+    # King.get_capture_only_moves)
+    steps = {square: set(king.get_possible_moves(square, game.board.bounds)) for square in squares}
+    guards = {square: set(king.get_attacked_squares(square, game.board.bounds)) for square in squares}
     placements = []
     for black_king in squares:
-        other_color = [n for n in reach[black_king] if n in free and (sum(n) - sum(black_king)) % 2 == 1]
+        other_color = [n for n in steps[black_king] if n in free and (sum(n) - sum(black_king)) % 2 == 1]
         for white_king in squares:
-            if white_king == black_king or white_king in reach[black_king]:
+            if white_king == black_king or white_king in guards[black_king]:
                 continue  # the kings may not stand next to each other
-            if all(n in reach[white_king] for n in other_color):
+            if all(n in guards[white_king] for n in other_color):
                 placements.append((black_king, white_king))
     return placements
 
