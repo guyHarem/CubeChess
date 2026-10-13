@@ -1,9 +1,8 @@
 // Game state from the backend plus the local selection (which piece is picked up)
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { api, legalMovesOf, rememberSeat } from './api.js'
+import { OFFLINE, api, legalMovesOf, rememberSeat } from './api.js'
 import { keyOf, parsePiece, sameCoord } from './chess.js'
 
-const OFFLINE = 'Cannot reach the game server. Start it with: python api/app.py'
 const POLL_MS = 1000 // how often an online game asks whether the other player has done something
 
 // which: a room id, or 'practice' for the lesson board

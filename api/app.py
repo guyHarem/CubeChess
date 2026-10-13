@@ -10,14 +10,53 @@ import sys
 # Make the project root importable so `python api/app.py` works from any directory
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from flask import Flask, request, jsonify, g
+from flask import Flask, request, jsonify, g, send_from_directory
 from flask_cors import CORS
+from werkzeug.middleware.proxy_fix import ProxyFix
+from api.limits import Limiter, Slots
 from api.rooms import Rooms
 from api.utils import convert_response
 from engine.pieces import Queen, Rook, Bishop, Knight
 
-app = Flask(__name__)
-CORS(app)
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# Two modes. On your own machine (the default) everything is open: the developer test bench,
+# the shared "main" room, position editing, requests from the Vite dev server. Hosted for
+# real visitors (CUBECHESS_ENV=production, see serve.py) those are closed and limits apply.
+PRODUCTION = os.environ.get("CUBECHESS_ENV") == "production"
+
+app = Flask(__name__, static_folder=None)
+app.config.update(
+    PRODUCTION=PRODUCTION,
+    MAX_CONTENT_LENGTH=64 * 1024,                                    # no request needs more
+    DIST=os.path.join(ROOT, "cubechess-frontend", "dist"),            # the built pages (npm run build)
+)
+if not PRODUCTION:
+    CORS(app)   # the dev pages come from another port; hosted, pages and API share one address
+elif os.environ.get("CUBECHESS_TRUST_PROXY", "1") != "0":
+    # Hosting providers put a proxy in front, which passes the visitor's address along
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1)
+
+# Per visitor, hosted mode only
+limits = {
+    "requests": Limiter(600, 60),      # everything: a page asks about once a second per open game
+    "new_games": Limiter(20, 60),
+    "computer_moves": Limiter(40, 60),
+    "thinking": Slots(2),              # computer moves being thought about at the same time
+}
+
+
+def hosted():
+    return app.config["PRODUCTION"]
+
+
+def visitor():
+    return request.remote_addr or "unknown"
+
+
+def too_many():
+    return jsonify({"success": False, "slow_down": True,
+                    "error": "Too many requests. Wait a moment and try again."}), 429
 
 # Every game lives in its own room (api/rooms.py), chosen with ?game=<room id>. POST /api/games
 # opens a new one. Two rooms always exist for the developer test bench and the tests:
@@ -29,10 +68,14 @@ practice_manager = rooms.get("practice").manager
 
 @app.before_request
 def choose_game():
-    if request.path == '/api/games':
+    if not request.path.startswith('/api/'):
+        return None   # a page or one of its files
+    if hosted() and not limits["requests"].allow(visitor()):
+        return too_many()
+    if request.path in ('/api/games', '/api/health'):
         return None
     room = rooms.get(request.args.get("game", "main"))
-    if room is None:
+    if room is None or (hosted() and room.permanent):
         return jsonify({"success": False, "gone": True, "error": "This game no longer exists"}), 404
     g.room = room
     g.manager = room.manager
@@ -93,6 +136,8 @@ def open_game():
     plus the options of /api/game/new. An online game also takes "side": the color the
     creator plays ("white" by default); the answer then carries the creator's secret "seat" key.
     The answer's "game_id" is the room: pass it as ?game=<game_id> from then on."""
+    if hosted() and not limits["new_games"].allow(visitor()):
+        return too_many()
     data = request.get_json(silent=True) or {}
     kind = data.get("kind", "local")
     side = data.get("side", "white")
@@ -206,8 +251,17 @@ def not_your_move():
 
 @app.route('/api/game/computer-move', methods=['POST'])
 def computer_move():
-    """Let the computer think and play. The page calls this when it is the computer's turn."""
-    return reply(g.manager.computer_move())
+    """Let the computer think and play. The page calls this when it is the computer's turn.
+    When every thinker is taken the answer has "busy": true and the page asks again."""
+    if not hosted():
+        return reply(g.manager.computer_move())
+    who = visitor()
+    if not limits["computer_moves"].allow(who) or not limits["thinking"].take(who):
+        return too_many()
+    try:
+        return reply(g.manager.computer_move())
+    finally:
+        limits["thinking"].give_back(who)
 
 
 # ==================== SPECIAL MOVES ====================
@@ -320,10 +374,42 @@ def sandbox_response(response):
 
 @app.before_request
 def no_sandbox_online():
-    """Positions cannot be edited in a game between two remote players"""
-    if request.path.startswith('/api/debug/') and online():
-        return refuse("That is not available in an online game")
+    """Positions cannot be edited in a game between two remote players. Hosted, only the
+    scratch boards of the lessons and puzzles can be edited at all."""
+    if request.path.startswith('/api/debug/'):
+        if online():
+            return refuse("That is not available in an online game")
+        if hosted() and g.room.kind != "practice":
+            return refuse("That is not available here")
     return None
+
+
+# ==================== THE PAGES ====================
+
+@app.route('/api/health')
+def health():
+    """For a hosting provider to check that the server is up"""
+    return jsonify({"success": True})
+
+
+@app.route('/', defaults={"path": "index.html"})
+@app.route('/<path:path>')
+def pages(path):
+    """The built frontend (cubechess-frontend/dist), so one program serves pages and API.
+    In development the pages come from the Vite dev server instead."""
+    if path.startswith('api/'):
+        return refuse("No such endpoint", 404)
+    dist = app.config["DIST"]
+    if not os.path.isfile(os.path.join(dist, "index.html")):
+        return refuse("The pages are not built. Run: npm --prefix cubechess-frontend run build", 404)
+    response = send_from_directory(dist, path)
+    if path.startswith('assets/'):
+        # Built files carry a fingerprint in their name, so they never change
+        response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    else:
+        response.headers["Cache-Control"] = "no-cache"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    return response
 
 
 @app.route('/api/debug/setup', methods=['POST'])
@@ -383,6 +469,10 @@ def debug_rocks():
 # ==================== SERVER ====================
 
 if __name__ == '__main__':
+    # Development only: this server reloads on every change and shows a debugger in the
+    # browser, which must never face the internet. To host the game, run serve.py instead.
+    if PRODUCTION:
+        raise SystemExit("api/app.py is the development server. For hosting run: python serve.py")
     # The computer player thinks in a worker process so the server stays responsive
     from api.thinker import ProcessThinker
     rooms.set_thinker(ProcessThinker())

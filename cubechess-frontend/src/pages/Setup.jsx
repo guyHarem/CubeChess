@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import CubeBoard from '../components/CubeBoard.jsx'
 import Logo from '../components/Logo.jsx'
-import { openGame } from '../lib/api.js'
+import { OFFLINE, openGame } from '../lib/api.js'
 import { START_BOARD } from '../lib/chess.js'
 import { navigate } from '../lib/router.js'
 import { CLOCK_PRESETS, LEVELS, clockRequest, computerRequest, levelName, loadSettings, saveSettings } from '../lib/settings.js'
@@ -79,7 +79,7 @@ export default function Setup() {
     } catch (problem) {
       setError(
         problem instanceof TypeError || problem instanceof SyntaxError
-          ? 'Cannot reach the game server. Start it with: python api/app.py'
+          ? OFFLINE
           : problem.message,
       )
       setStarting(false)

@@ -91,6 +91,38 @@ npm run dev
 # App runs on http://localhost:5173 (Vite picks the next free port if that one is taken)
 ```
 
+### Hosting (not deployed yet)
+
+Everything above is for your own machine. To run the game for real visitors there is a second
+way to start it, which can be tried locally:
+
+```bash
+npm --prefix cubechess-frontend run build     # once, and after every change to the pages
+venv/bin/python serve.py                       # then open http://localhost:8000
+```
+
+`serve.py` runs one program that serves both the built pages and the API, in hosted mode:
+
+- no debugger and no auto-reload (`api/app.py` is the development server and refuses to start
+  in hosted mode);
+- the shared `main` and `practice` rooms are closed, positions can be edited only on the
+  scratch boards of lessons and puzzles, and the developer bench page is not in the build;
+- other websites cannot call the API (pages and API share one address, so cross-site access is
+  simply off);
+- limits per visitor: 600 requests a minute, 20 new games a minute, 40 computer moves a
+  minute and 2 being thought about at once. Over a limit the answer is HTTP 429 with
+  `slow_down: true`;
+- the computer thinks in up to `CUBECHESS_THINKERS` worker processes (one CPU core each;
+  default the number of cores minus one, at most 4) with a short line behind them. When the
+  line is full a computer move is answered with `busy: true` and the page asks again.
+
+It is a single process on purpose: games live in its memory. Restarting it ends the games in
+progress, and running two copies would give each its own set of games. Settings are
+environment variables: `PORT` (8000), `HOST` (0.0.0.0), `CUBECHESS_THINKERS`, and
+`CUBECHESS_TRUST_PROXY` (set to `0` if no proxy stands in front; otherwise the visitor's
+address is taken from the proxy). `GET /api/health` answers `{"success": true}` for a host's
+health check.
+
 ### Computer opponent
 
 The computer is not trained; it plays like a classic chess program (`ai/`):
@@ -268,7 +300,8 @@ CubeChess/
 │   ├── game_manager.py   # Business logic wrapper
 │   ├── rooms.py          # One room per game; seats and offers for online games
 │   ├── clock.py          # Chess clock
-│   ├── thinker.py        # Runs the computer's thinking in a worker process
+│   ├── thinker.py        # Runs the computer's thinking in worker processes
+│   ├── limits.py         # Per-visitor limits for the hosted game
 │   └── utils.py          # JSON serialization
 ├── cubechess-frontend/    # React + Vite + Three.js frontend
 │   ├── src/
@@ -279,6 +312,7 @@ CubeChess/
 │   │   └── pieces3d.js   # Procedural 3D piece models
 │   └── dev/              # Sprite renderer used for the design artboards
 ├── tools/                # Scenario generator, level matches, self-play tuning, endgame and mating-material checks
+├── serve.py              # Starts the game in hosted mode (pages + API in one program)
 ├── tests/                # Test suite
 └── IMPLEMENTATION_GUIDE.md # Original planning notes
 ```

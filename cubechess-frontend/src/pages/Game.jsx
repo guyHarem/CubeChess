@@ -121,7 +121,10 @@ export default function Game({ id }) {
       if (data?.success) {
         setAttempt((count) => count + 1)
       } else {
-        setTimeout(() => setAttempt((count) => count + 1), data ? 300 : 3000)
+        // Thrown away because the game changed: ask again at once. Turned away because the
+        // server is busy, or no answer at all: give it a little time first.
+        const pause = !data ? 3000 : data.busy || data.slow_down ? 2000 : 300
+        setTimeout(() => setAttempt((count) => count + 1), pause)
       }
     }, 450)
     return () => clearTimeout(timer)

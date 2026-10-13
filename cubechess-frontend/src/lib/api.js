@@ -4,6 +4,12 @@
 // id, and every later call names that id. Lessons and scenarios pass 'practice' instead and
 // get a scratch room of their own for this tab.
 
+// What to say when the server does not answer. Visitors of the hosted game cannot start
+// anything; on a developer's machine the usual cause is that the backend is not running.
+export const OFFLINE = import.meta.env.DEV
+  ? 'Cannot reach the game server. Start it with: python api/app.py'
+  : 'Cannot reach the game server. Check your connection and try again in a moment.'
+
 const SEAT = 'cubechess.seat.' // + room id: the secret key that says which side of an online game is ours
 const PRACTICE = 'cubechess.practice'
 const LAST_GAME = 'cubechess.game'

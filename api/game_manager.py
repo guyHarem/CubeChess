@@ -5,7 +5,7 @@ import time
 
 from ai.levels import LEVELS, accepts_draw, think_time
 from api.clock import ChessClock
-from api.thinker import think
+from api.thinker import Busy, think
 from engine.game_state import GameState
 from engine.pieces import King, Queen, Rook, Bishop, Knight, Pawn, Rock
 
@@ -306,7 +306,10 @@ class GameManager:
                 return response
         except ValueError as e:
             with self.lock:
-                return self._error_response(e)
+                response = self._error_response(e)
+                if isinstance(e, Busy):
+                    response["busy"] = True   # not a fault: the page asks again shortly
+                return response
 
     # ==================== ENDING THE GAME BY CHOICE ====================
 

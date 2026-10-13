@@ -8,8 +8,9 @@ import Scenarios from './pages/Scenarios.jsx'
 import Setup from './pages/Setup.jsx'
 import './app.css'
 
-// Developer tool for poking at backend behaviour, kept out of the main bundle
-const TestBench = lazy(() => import('./bench/TestBench.jsx'))
+// Developer tool for poking at backend behaviour: only on a developer's machine, and left
+// out of the build that visitors get
+const TestBench = import.meta.env.DEV ? lazy(() => import('./bench/TestBench.jsx')) : null
 
 export default function App() {
   const route = useRoute()
@@ -23,7 +24,7 @@ export default function App() {
   }
   if (route === '/learn') return <Learn />
   if (route.startsWith('/scenarios')) return <Scenarios id={route.split('/')[2]} />
-  if (route === '/bench') {
+  if (TestBench && route === '/bench') {
     return (
       <Suspense fallback={null}>
         <TestBench />
