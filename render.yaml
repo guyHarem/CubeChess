@@ -5,7 +5,11 @@
 # Keep it at one instance: games live in the server's memory (see serve.py).
 services:
   - type: web
-    name: layerchess       # the address: layerchess.onrender.com (the game itself is still called CubeChess)
+    name: realmchess       # also reachable at realmchess.onrender.com
+    # Render adds www.realmchess.com by itself and sends it on to realmchess.com. The DNS
+    # records at the domain's registrar: see "Custom domain" in the README.
+    domains:
+      - realmchess.com
     runtime: python
     # Half a CPU core and 512 MB. The free plan will not do: it sleeps after 15 idle minutes,
     # which ends every game, and has a tenth of a core for the computer player. One step up
@@ -30,9 +34,9 @@ services:
         value: 24.21.0
       # The server would guess from the machine's core count, which is the whole shared
       # machine and not this plan's share. Make it 2 on a plan with two cores or more.
-      - key: CUBECHESS_THINKERS
+      - key: REALMCHESS_THINKERS
         value: "1"
       # Render has three proxies in front of the service. Check after the first deploy:
       # /api/health must show your own public address as "visitor".
-      - key: CUBECHESS_TRUST_PROXY
+      - key: REALMCHESS_TRUST_PROXY
         value: "3"

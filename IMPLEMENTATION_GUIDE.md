@@ -1,8 +1,8 @@
-# CubeChess - Full-Stack Implementation Guide
+# RealmChess - Full-Stack Implementation Guide
 
 ## Project Overview
 
-**CubeChess** is a 3D chess variant played on a 5-layer 8×8 board (like 5 stacked chess boards).
+**RealmChess** is a 3D chess variant played on a 5-layer 8×8 board (like 5 stacked chess boards).
 
 **Status:** Engine complete ✅ | API/Frontend pending 🔄
 
@@ -365,7 +365,7 @@ class Board3D {
 
 ### Terminal 1: Backend
 ```bash
-cd /Users/guyharem/Projects/CubeChess
+cd /Users/guyharem/Projects/RealmChess
 python3 -m venv venv
 source venv/bin/activate
 pip install flask flask-cors

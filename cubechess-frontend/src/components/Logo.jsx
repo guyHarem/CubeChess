@@ -15,7 +15,7 @@ export function LogoMark({ size = 34 }) {
 export function Wordmark() {
   return (
     <span className="wordmark">
-      Cube<span>Chess</span>
+      Realm<span>Chess</span>
     </span>
   )
 }

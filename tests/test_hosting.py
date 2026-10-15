@@ -1,5 +1,5 @@
 """
-Hosted mode: what changes when the game faces the internet (CUBECHESS_ENV=production, serve.py).
+Hosted mode: what changes when the game faces the internet (REALMCHESS_ENV=production, serve.py).
 On a developer's machine none of these restrictions apply, which the other test files rely on.
 """
 import json
@@ -222,7 +222,7 @@ class TestStartUp(unittest.TestCase):
 
     def run_python(self, code, **environment):
         env = {**os.environ, **environment}
-        env.pop("CUBECHESS_ENV", None) if "CUBECHESS_ENV" not in environment else None
+        env.pop("REALMCHESS_ENV", None) if "REALMCHESS_ENV" not in environment else None
         return subprocess.run([sys.executable, "-c", code], cwd=ROOT, env=env, capture_output=True, text=True, timeout=60)
 
     CROSS_SITE = ("from api.app import app\n"
@@ -230,13 +230,13 @@ class TestStartUp(unittest.TestCase):
                   "print('allowed' if 'Access-Control-Allow-Origin' in r.headers else 'not allowed')")
 
     def test_other_sites_cannot_call_the_hosted_api(self):
-        self.assertEqual(self.run_python(self.CROSS_SITE, CUBECHESS_ENV="production").stdout.strip(), "not allowed")
+        self.assertEqual(self.run_python(self.CROSS_SITE, REALMCHESS_ENV="production").stdout.strip(), "not allowed")
         # In development the pages come from another port, so there it is allowed
         self.assertEqual(self.run_python(self.CROSS_SITE).stdout.strip(), "allowed")
 
     def test_the_development_server_refuses_to_run_hosted(self):
         done = subprocess.run([sys.executable, "api/app.py"], cwd=ROOT, capture_output=True, text=True, timeout=60,
-                              env={**os.environ, "CUBECHESS_ENV": "production"})
+                              env={**os.environ, "REALMCHESS_ENV": "production"})
         self.assertNotEqual(done.returncode, 0)
         self.assertIn("serve.py", done.stderr)
 
@@ -247,9 +247,9 @@ class TestStartUp(unittest.TestCase):
                 "c = m.app.test_client()\n"
                 "post = lambda ip: c.post('/api/games', json={'kind': 'local'}, headers={'X-Forwarded-For': ip}).status_code\n"
                 "print(post('203.0.113.1'), post('203.0.113.1'), post('203.0.113.2'))")
-        self.assertEqual(self.run_python(code, CUBECHESS_ENV="production").stdout.strip(), "200 429 200")
+        self.assertEqual(self.run_python(code, REALMCHESS_ENV="production").stdout.strip(), "200 429 200")
         # Told not to trust a proxy, everyone arriving through one address counts as one visitor
-        self.assertEqual(self.run_python(code, CUBECHESS_ENV="production", CUBECHESS_TRUST_PROXY="0").stdout.strip(),
+        self.assertEqual(self.run_python(code, REALMCHESS_ENV="production", REALMCHESS_TRUST_PROXY="0").stdout.strip(),
                          "200 429 429")
 
     def test_behind_several_proxies_the_visitor_is_counted_from_the_end(self):
@@ -261,10 +261,10 @@ class TestStartUp(unittest.TestCase):
                 "print(who('203.0.113.1, 172.70.0.1, 10.0.0.1'), who('6.6.6.6,203.0.113.2, 172.70.0.1, 10.0.0.1'),"
                 " who('10.0.0.1'))")
         # (a caller that came past fewer proxies, like the host's own health check, keeps its own address)
-        self.assertEqual(self.run_python(code, CUBECHESS_ENV="production", CUBECHESS_TRUST_PROXY="3").stdout.strip(),
+        self.assertEqual(self.run_python(code, REALMCHESS_ENV="production", REALMCHESS_TRUST_PROXY="3").stdout.strip(),
                          "203.0.113.1 203.0.113.2 127.0.0.1")
         # With the count too low, every visitor would look like one of the host's proxies
-        self.assertEqual(self.run_python(code, CUBECHESS_ENV="production").stdout.strip(),
+        self.assertEqual(self.run_python(code, REALMCHESS_ENV="production").stdout.strip(),
                          "10.0.0.1 10.0.0.1 10.0.0.1")
 
 
@@ -277,7 +277,7 @@ class TestRealServer(unittest.TestCase):
             self.port = probe.getsockname()[1]
         self.server = subprocess.Popen(
             [sys.executable, "-c", f"import serve; serve.start('127.0.0.1', {self.port}, thinkers=1)"], cwd=ROOT,
-            env={**os.environ, "CUBECHESS_TRUST_PROXY": "3"}, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            env={**os.environ, "REALMCHESS_TRUST_PROXY": "3"}, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         self.addCleanup(self.stop)
 
     def stop(self):

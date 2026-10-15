@@ -11,7 +11,7 @@ import collection from '../scenarios.json'
 
 const TIERS = collection.tiers
 const ALL = TIERS.flatMap((tier) => tier.scenarios.map((scenario, index) => ({ ...scenario, tier, number: index + 1 })))
-const STORE = 'cubechess.scenarios'
+const STORE = 'realmchess.scenarios'
 const GOALS = { 1: 'Checkmate in one move.', 2: 'Checkmate in two moves.' }
 
 function loadSolved() {

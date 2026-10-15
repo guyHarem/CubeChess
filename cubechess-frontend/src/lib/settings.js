@@ -42,7 +42,7 @@ export function clockRequest(clock) {
   return preset ? { initial: preset.initial, increment: preset.increment } : null
 }
 
-const KEY = 'cubechess.settings'
+const KEY = 'realmchess.settings'
 
 export function loadSettings() {
   try {

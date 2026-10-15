@@ -108,7 +108,7 @@ function App() {
   return (
     <div className="bench">
       <header>
-        <h1>CubeChess test bench</h1>
+        <h1>RealmChess test bench</h1>
         <p className="note">Temporary tool for checking backend move and capture behavior.</p>
       </header>
 

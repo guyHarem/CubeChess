@@ -11,7 +11,7 @@ import course from '../lessons.json'
 const LESSONS = course.lessons
 const BOARD = course.board
 const BOARD_LAYERS = layersOf(BOARD)
-const STORE = 'cubechess.lessons'
+const STORE = 'realmchess.lessons'
 
 function loadDone() {
   try {

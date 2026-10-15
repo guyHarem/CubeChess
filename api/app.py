@@ -1,5 +1,5 @@
 """
-Flask API for CubeChess game engine.
+Flask API for RealmChess game engine.
 Provides HTTP endpoints for game management.
 """
 
@@ -22,8 +22,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # Two modes. On your own machine (the default) everything is open: the developer test bench,
 # the shared "main" room, position editing, requests from the Vite dev server. Hosted for
-# real visitors (CUBECHESS_ENV=production, see serve.py) those are closed and limits apply.
-PRODUCTION = os.environ.get("CUBECHESS_ENV") == "production"
+# real visitors (REALMCHESS_ENV=production, see serve.py) those are closed and limits apply.
+PRODUCTION = os.environ.get("REALMCHESS_ENV") == "production"
 
 app = Flask(__name__, static_folder=None)
 app.config.update(
@@ -38,7 +38,7 @@ else:
     # of X-Forwarded-For, so with N proxies the visitor is the Nth entry from the end;
     # anything before that was sent by the visitor and proves nothing. N differs per host
     # (Render: 3, see render.yaml). /api/health shows the address this arrives at.
-    PROXIES = int(os.environ.get("CUBECHESS_TRUST_PROXY", "1"))
+    PROXIES = int(os.environ.get("REALMCHESS_TRUST_PROXY", "1"))
     if PROXIES > 0:
         app.wsgi_app = ProxyFix(app.wsgi_app, x_for=PROXIES)
 
@@ -394,7 +394,7 @@ def no_sandbox_online():
 @app.route('/api/health')
 def health():
     """For a hosting provider to check that the server is up. Hosted, it also says which
-    address it takes the caller for: that is how to check CUBECHESS_TRUST_PROXY on a new
+    address it takes the caller for: that is how to check REALMCHESS_TRUST_PROXY on a new
     host, since the limits per visitor go by this address."""
     if hosted():
         return jsonify({"success": True, "visitor": visitor()})

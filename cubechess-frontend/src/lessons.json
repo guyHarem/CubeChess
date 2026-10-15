@@ -4,7 +4,7 @@
     {
       "id": "cube",
       "title": "The cube and its layers",
-      "text": "CubeChess is played inside a block of cells. This practice board has three layers: Sky on top, Ground in the middle, Dungeon below. Click a piece to see where it can go, then click one of the balls to move it.",
+      "text": "RealmChess is played inside a block of cells. This practice board has three layers: Sky on top, Ground in the middle, Dungeon below. Click a piece to see where it can go, then click one of the balls to move it.",
       "steps": [
         {
           "task": "Move the rook to the glowing cell at the far end of the Ground.",
@@ -76,7 +76,7 @@
     {
       "id": "knight",
       "title": "The knight jumps layers",
-      "text": "A knight moves two cells in one direction and one in another. In CubeChess one of those directions can be up or down, so it can land on the layer above or below. It is the only piece that jumps over pieces and rocks.",
+      "text": "A knight moves two cells in one direction and one in another. In RealmChess one of those directions can be up or down, so it can land on the layer above or below. It is the only piece that jumps over pieces and rocks.",
       "steps": [
         {
           "task": "Move the knight to the glowing cell on the Sky layer.",

@@ -10,9 +10,9 @@ export const OFFLINE = import.meta.env.DEV
   ? 'Cannot reach the game server. Start it with: python api/app.py'
   : 'Cannot reach the game server. Check your connection and try again in a moment.'
 
-const SEAT = 'cubechess.seat.' // + room id: the secret key that says which side of an online game is ours
-const PRACTICE = 'cubechess.practice'
-const LAST_GAME = 'cubechess.game'
+const SEAT = 'realmchess.seat.' // + room id: the secret key that says which side of an online game is ours
+const PRACTICE = 'realmchess.practice'
+const LAST_GAME = 'realmchess.game'
 
 function read(store, key) {
   try {

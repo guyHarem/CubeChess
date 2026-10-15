@@ -7,9 +7,9 @@ Run the game for real visitors: one program serving the built pages and the API.
 Settings (environment variables):
     PORT                    port to listen on (default 8000)
     HOST                    address to listen on (default 0.0.0.0: reachable from other machines)
-    CUBECHESS_THINKERS      computer moves thought about at the same time, one CPU core each
+    REALMCHESS_THINKERS      computer moves thought about at the same time, one CPU core each
                             (default: the number of cores minus one, at most 4)
-    CUBECHESS_TRUST_PROXY   how many proxies stand in front of this server (default 1; 0 for
+    REALMCHESS_TRUST_PROXY   how many proxies stand in front of this server (default 1; 0 for
                             none). The visitor's address is read that many entries from the
                             end of X-Forwarded-For. Check it at /api/health, which shows the
                             address the server takes you for
@@ -20,7 +20,7 @@ each have their own set. Restarting it ends the games in progress.
 import os
 import signal
 
-os.environ["CUBECHESS_ENV"] = "production"   # must be set before api.app is imported
+os.environ["REALMCHESS_ENV"] = "production"   # must be set before api.app is imported
 
 
 def start(host, port, thinkers=None):
@@ -56,4 +56,4 @@ if __name__ == "__main__":
         raise SystemExit("The pages are not built yet. Run: npm --prefix cubechess-frontend run build")
 
     start(os.environ.get("HOST", "0.0.0.0"), int(os.environ.get("PORT", 8000)),
-          thinkers=int(os.environ.get("CUBECHESS_THINKERS", 0)))
+          thinkers=int(os.environ.get("REALMCHESS_THINKERS", 0)))

@@ -1,7 +1,7 @@
-# CubeChess Game Specification & Architecture Plan
+# RealmChess Game Specification & Architecture Plan
 
 ## 1. Overview
-**CubeChess** is a 3-dimensional chess variant played across 5 parallel layers of $8 \times 8$ grids. The game introduces verticality, environmental obstacles (rocks in the Dungeon layers), and highly agile vertical skirmishers (Knights).
+**RealmChess** is a 3-dimensional chess variant played across 5 parallel layers of $8 \times 8$ grids. The game introduces verticality, environmental obstacles (rocks in the Dungeon layers), and highly agile vertical skirmishers (Knights).
 
 ### The Board Coordinate System ($X, Y, Z$)
 Every position on the board is represented as a 3D tuple: `(x, y, z)` where:

@@ -10,7 +10,7 @@ export default function Home() {
           <div className="home-brand">
             <LogoMark size={84} />
             <h1>
-              Cube<span>Chess</span>
+              Realm<span>Chess</span>
             </h1>
           </div>
           <p>Chess on five stacked boards. Climb to the sky or drop into the dungeon.</p>
@@ -38,7 +38,7 @@ export default function Home() {
             <div className="mode-picture">
               <CubeBoard interactive={false} board={START_BOARD} />
             </div>
-            <h2>Play CubeChess</h2>
+            <h2>Play RealmChess</h2>
             <p>Play the computer, a friend beside you, or a friend online with a link.</p>
             <span className="button button-primary">Set up a game</span>
           </a>

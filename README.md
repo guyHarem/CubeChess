@@ -1,6 +1,9 @@
-# CubeChess 🎮♟️
+# RealmChess 🎮♟️
 
-A 3D chess variant on a 5-layer cube board. This is a **work in progress (WIP)**.
+A 3D chess variant on five stacked 8×8 boards. This is a **work in progress (WIP)**.
+
+It was called CubeChess until October 2026; the folders (`CubeChess/`, `cubechess-frontend/`)
+keep the old name. The site will be at [realmchess.com](https://realmchess.com).
 
 ## Project Status: Phase 1 Complete ✅
 
@@ -114,14 +117,14 @@ venv/bin/python serve.py                       # then open http://localhost:8000
 - limits per visitor: 600 requests a minute, 20 new games a minute, 40 computer moves a
   minute and 2 being thought about at once. Over a limit the answer is HTTP 429 with
   `slow_down: true`;
-- the computer thinks in up to `CUBECHESS_THINKERS` worker processes (one CPU core each;
+- the computer thinks in up to `REALMCHESS_THINKERS` worker processes (one CPU core each;
   default the number of cores minus one, at most 4) with a short line behind them. When the
   line is full a computer move is answered with `busy: true` and the page asks again.
 
 It is a single process on purpose: games live in its memory. Restarting it ends the games in
 progress, and running two copies would give each its own set of games. Settings are
-environment variables: `PORT` (8000), `HOST` (0.0.0.0), `CUBECHESS_THINKERS`, and
-`CUBECHESS_TRUST_PROXY`: how many proxies stand in front of the server (default 1, `0` for
+environment variables: `PORT` (8000), `HOST` (0.0.0.0), `REALMCHESS_THINKERS`, and
+`REALMCHESS_TRUST_PROXY`: how many proxies stand in front of the server (default 1, `0` for
 none). Each proxy adds the address it heard from to the end of `X-Forwarded-For`, so the
 visitor is that many entries from the end. `GET /api/health` is for a host's health check;
 hosted, it answers `{"success": true, "visitor": "<address>"}` with the address the server
@@ -135,14 +138,29 @@ service that builds the pages and starts `serve.py`.
 1. In the Render dashboard choose **New > Blueprint** and pick this repository. Render reads
    `render.yaml` and creates the service (plan `starter`, region Frankfurt; change them in the
    file first if you want others, the region cannot be changed afterwards).
-2. When the first deploy is live, open `https://<the service>.onrender.com/api/health`.
+2. When the first deploy is live, open `https://realmchess.onrender.com/api/health`.
    `visitor` must be your own public address. If it is not, the number of proxies in
-   `CUBECHESS_TRUST_PROXY` is wrong and the limits per visitor would be shared.
+   `REALMCHESS_TRUST_PROXY` is wrong and the limits per visitor would be shared.
 3. Later versions go out when you press **Manual Deploy > Deploy latest commit**. Automatic
    deploys are off on purpose: a deploy restarts the server, which ends the games in progress.
 
 The file sets one computer thinker, which suits a plan with one core or less; raise
-`CUBECHESS_THINKERS` together with the plan.
+`REALMCHESS_THINKERS` together with the plan.
+
+#### Custom domain
+
+`render.yaml` attaches realmchess.com to the service; Render adds www.realmchess.com itself,
+sends it on to realmchess.com, and issues the HTTPS certificates. At the registrar (GoDaddy),
+in the domain's DNS records:
+
+| Type  | Name  | Value                     |
+|-------|-------|---------------------------|
+| A     | `@`   | `216.24.57.1`             |
+| CNAME | `www` | `realmchess.onrender.com` |
+
+Remove any other `A` records for `@` (GoDaddy's parking page), every `AAAA` record, and any
+domain forwarding. Then press **Verify** next to each domain in the service's settings on
+Render. Until the records have spread, the game is at realmchess.onrender.com.
 
 ### Computer opponent
 
