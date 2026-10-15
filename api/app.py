@@ -37,7 +37,7 @@ else:
     # Hosting providers put proxies in front. Each adds the address it heard from to the end
     # of X-Forwarded-For, so with N proxies the visitor is the Nth entry from the end;
     # anything before that was sent by the visitor and proves nothing. N differs per host
-    # (Render: 3, see render.yaml). /api/health shows the address this arrives at.
+    # (Render: 2, see render.yaml). /api/health shows the address this arrives at.
     PROXIES = int(os.environ.get("REALMCHESS_TRUST_PROXY", "1"))
     if PROXIES > 0:
         app.wsgi_app = ProxyFix(app.wsgi_app, x_for=PROXIES)

@@ -253,8 +253,8 @@ class TestStartUp(unittest.TestCase):
                          "200 429 429")
 
     def test_behind_several_proxies_the_visitor_is_counted_from_the_end(self):
-        # What a server on Render receives: whatever the visitor sent, then the visitor's real
-        # address, then two of the host's own proxies
+        # Behind three proxies: whatever the visitor sent, then the visitor's real address, then
+        # what the host's two inner proxies add
         code = ("from api import app as m\n"
                 "c = m.app.test_client()\n"
                 "who = lambda chain: c.get('/api/health', headers={'X-Forwarded-For': chain}).get_json()['visitor']\n"

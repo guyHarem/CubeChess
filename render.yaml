@@ -36,7 +36,7 @@ services:
       # machine and not this plan's share. Make it 2 on a plan with two cores or more.
       - key: REALMCHESS_THINKERS
         value: "1"
-      # Render has three proxies in front of the service. Check after the first deploy:
-      # /api/health must show your own public address as "visitor".
+      # Render adds two entries to X-Forwarded-For (measured on this service, October 2026).
+      # Check after a change: /api/health must show your own public address as "visitor".
       - key: REALMCHESS_TRUST_PROXY
-        value: "3"
+        value: "2"
