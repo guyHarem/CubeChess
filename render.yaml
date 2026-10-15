@@ -5,7 +5,7 @@
 # Keep it at one instance: games live in the server's memory (see serve.py).
 services:
   - type: web
-    name: cubechess
+    name: layerchess       # the address: layerchess.onrender.com (the game itself is still called CubeChess)
     runtime: python
     # Half a CPU core and 512 MB. The free plan will not do: it sleeps after 15 idle minutes,
     # which ends every game, and has a tenth of a core for the computer player. One step up
