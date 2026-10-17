@@ -1891,17 +1891,21 @@ legend {
   }
 
   /* ----- lessons ----- */
+  /* One screen: the 3D board takes the height the words leave over. Only on a very short
+     phone, where it would drop below its minimum, does the page scroll */
   .learn {
-    height: auto;
-    min-height: 100dvh;
-    overflow: visible;
+    height: 100dvh;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
   }
 
   .learn-main {
-    padding: 10px 12px 0;
+    flex: 1 0 auto;
+    padding: 8px 12px 0;
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 8px;
   }
 
   .lesson-list {
@@ -1939,11 +1943,12 @@ legend {
 
   .lesson {
     flex: 1;
-    gap: 10px;
+    gap: 8px;
   }
 
+  /* The numbered buttons already say which lesson this is */
   .lesson-count {
-    font-size: 13px;
+    display: none;
   }
 
   .lesson h1 {
@@ -1951,17 +1956,16 @@ legend {
   }
 
   .lesson-text {
-    font-size: 14.5px;
-    line-height: 1.4;
+    font-size: 14px;
+    line-height: 1.38;
   }
 
   .task {
-    padding: 10px 12px;
-    font-size: 14.5px;
+    padding: 8px 12px;
+    font-size: 14px;
+    line-height: 1.38;
   }
 
-  /* The 3D board takes whatever height is left on the screen, down to a minimum; on a
-     short phone the page scrolls a little instead of squeezing it further */
   .lesson-board {
     flex: 1 1 auto;
     display: flex;
@@ -1974,9 +1978,9 @@ legend {
   }
 
   .lesson-board .board-frame {
-    flex: 1 1 150px;
+    flex: 1 1 0;
     height: auto;
-    min-height: 150px;
+    min-height: 110px;
   }
 
   /* The small top view on the left, what its marks mean on the right */
@@ -1992,8 +1996,8 @@ legend {
 
   .lesson-side .map-frame {
     flex: none;
-    width: 58%;
-    max-width: 230px;
+    width: 46%;
+    max-width: 180px;
   }
 
   .legend {
@@ -2002,6 +2006,7 @@ legend {
     margin: 0;
     gap: 8px;
     font-size: 13px;
+    line-height: 1.3;
   }
 
   .lesson-actions {
@@ -2023,6 +2028,34 @@ legend {
 
   .lesson-wait {
     display: none;
+  }
+
+  /* Shorter phones (most iPhones once Safari's bars are counted): tighten further */
+  @media (max-height: 700px) {
+    .lesson-link {
+      min-height: 36px;
+    }
+
+    .lesson h1 {
+      font-size: 20px;
+    }
+
+    .lesson-text,
+    .task {
+      font-size: 13.5px;
+    }
+
+    .lesson-board .board-frame {
+      min-height: 90px;
+    }
+
+    .lesson-side .map-frame {
+      max-width: 140px;
+    }
+
+    .legend {
+      font-size: 12.5px;
+    }
   }
 
   /* ----- puzzles: the list ----- */
@@ -2125,17 +2158,20 @@ legend {
   }
 
   /* ----- puzzles: playing one ----- */
+  /* One screen, like a lesson: the 3D board takes the height that is left over */
   .solve {
-    height: auto;
-    min-height: 100dvh;
-    overflow: visible;
+    height: 100dvh;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
   }
 
   .solve-main {
-    padding: 10px 12px 0;
+    flex: 1 0 auto;
+    padding: 8px 12px 0;
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 8px;
   }
 
   /* The info column dissolves so that its parts can be ordered around the boards */
@@ -2158,9 +2194,9 @@ legend {
   }
 
   .solve-board .board-frame {
-    flex: 1 1 150px;
+    flex: 1 1 0;
     height: auto;
-    min-height: 150px;
+    min-height: 110px;
   }
 
   .solve-side h2,
@@ -2189,5 +2225,15 @@ legend {
     padding: 0 4px;
     font-size: 13px;
     text-align: center;
+  }
+
+  @media (max-height: 700px) {
+    .solve-board .board-frame {
+      min-height: 90px;
+    }
+
+    .solve-goal {
+      font-size: 13.5px;
+    }
   }
 }

@@ -266,6 +266,35 @@ function CameraRig({ home, command, interactive }) {
   )
 }
 
+// A still picture (frameloop "demand") is drawn only when something asks for it. Safari can
+// draw it once before the page has its final size, or lose the drawing when it sets the
+// page aside, and then shows an empty box. So it is drawn again whenever that may happen.
+function KeepDrawn() {
+  const { gl, invalidate, size } = useThree()
+
+  useEffect(() => invalidate(), [invalidate, size.width, size.height])
+
+  useEffect(() => {
+    let alive = true
+    const again = () => alive && invalidate()
+    document.fonts?.ready.then(again)
+    const timers = [100, 500, 1500].map((ms) => setTimeout(again, ms))
+    const canvas = gl.domElement
+    window.addEventListener('pageshow', again)
+    document.addEventListener('visibilitychange', again)
+    canvas.addEventListener('webglcontextrestored', again)
+    return () => {
+      alive = false
+      timers.forEach(clearTimeout)
+      window.removeEventListener('pageshow', again)
+      document.removeEventListener('visibilitychange', again)
+      canvas.removeEventListener('webglcontextrestored', again)
+    }
+  }, [gl, invalidate])
+
+  return null
+}
+
 // ---------- the board ----------
 
 function Scene({
@@ -415,6 +444,7 @@ export default function CubeBoard({
         interactive={interactive}
         onCellClick={onCellClick}
       />
+      {!interactive && <KeepDrawn />}
     </Canvas>
   )
 }
