@@ -18,9 +18,10 @@ services:
     region: frankfurt        # cannot be changed later: oregon, ohio, virginia, frankfurt, singapore
     branch: main
     numInstances: 1
-    # A deploy restarts the server and ends the games in progress, so it does not happen on
-    # every push. Deploy from the dashboard: Manual Deploy > Deploy latest commit.
-    autoDeployTrigger: "off"
+    # Every push to main goes live. A deploy restarts the server, which ends the games in
+    # progress (they live in memory): set this to "off" once people play for real, and
+    # deploy from the dashboard instead (Manual Deploy > Deploy latest commit).
+    autoDeployTrigger: commit
     buildCommand: >-
       pip install -r requirements.txt &&
       npm --prefix cubechess-frontend ci --include=dev &&

@@ -141,8 +141,9 @@ service that builds the pages and starts `serve.py`.
 2. When the first deploy is live, open `https://realmchess.onrender.com/api/health`.
    `visitor` must be your own public address. If it is not, the number of proxies in
    `REALMCHESS_TRUST_PROXY` is wrong and the limits per visitor would be shared.
-3. Later versions go out when you press **Manual Deploy > Deploy latest commit**. Automatic
-   deploys are off on purpose: a deploy restarts the server, which ends the games in progress.
+3. Every push to `main` deploys by itself (`autoDeployTrigger: commit`). A deploy restarts
+   the server, which ends the games in progress; once people play for real, set it to `"off"`
+   and deploy with **Manual Deploy > Deploy latest commit** instead.
 
 The file sets one computer thinker, which suits a plan with one core or less; raise
 `REALMCHESS_THINKERS` together with the plan.
